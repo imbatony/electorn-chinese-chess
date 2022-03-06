@@ -1,0 +1,230 @@
+import { spawn, ChildProcessWithoutNullStreams } from "child_process";
+
+const INFO = "info";
+const NO_BEST_MOVE = "nobestmove";
+const BEST_MOVE = "bestmove";
+const POSITION = "position";
+export const UCCI = "ucci";
+export const IS_READY = "isready";
+export const GO = "go";
+export const STOP = "stop";
+export const RESTART_COMMAND = "restart-ucci";
+
+export type UCCICallback = (err: Error, data: string) => void;
+export interface Info {
+  depth: number;
+  score: number;
+  pv: string;
+}
+export interface InfoAndMove {
+  infoList: Array<Info>;
+  bestmove: string;
+  ponder: string;
+}
+
+export class UCCIEngine {
+  private callback: UCCICallback;
+  private resultBuffer = "";
+  private IN_GO_WAITING = false;
+  private release = true;
+  private posProc: ChildProcessWithoutNullStreams;
+  private UCCI_ENGINE_LOCATION: string;
+  constructor(UCCI_ENGINE_LOCATION: string) {
+    this.UCCI_ENGINE_LOCATION = UCCI_ENGINE_LOCATION;
+    this.init();
+  }
+
+  private connect(delayed: boolean) {
+    if (!delayed) {
+      // console.log("Waiting for 3 seconds ...");
+      setTimeout(this.connect, 3000, true);
+    }
+    //   posProc.stdin.setEncoding = "utf-8";
+    this.release = false;
+    // console.log("UCCI Engine started.");
+  }
+  private init() {
+    console.log("In init ...", this.UCCI_ENGINE_LOCATION);
+    this.posProc = spawn(this.UCCI_ENGINE_LOCATION, []);
+
+    this.posProc.stdout.once("data", (data: any) => {
+      const textChunk = data.toString("utf8");
+      // console.log("data once received from engine: ", textChunk);
+    });
+
+    this.posProc.on("exit", (code) => {
+      // console.log("Closed with code: ", code);
+      // console.log("Restarting");
+      this.init(); // Restart ...
+      this.callback(null, "Restarted ...");
+    });
+
+    this.posProc.stdout.on("data", (data: any) => {
+      const textChunk = data.toString("utf8");
+      this.resultBuffer += textChunk;
+      // console.log("Buffered message received: ", this.resultBuffer, textChunk);
+      // 普通返回，不知道有多少行，收到即返回；很可能丢东西，即返回长短不确定。
+      // 但不影响总的功能，因为不需要程序处理
+      // INFO 的返回，需要一直等待bestmove...
+
+      // 如果不是整行，则收满整行；否则，是个状态机
+
+      const lastChar = textChunk.substring(textChunk.length - 1);
+
+      if (lastChar !== "\n") {
+        // need buffer this
+        return; // 不callback，继续接
+      }
+
+      switch (true) {
+        // 如果含nobestmove，则为结束
+        case this.resultBuffer.indexOf(NO_BEST_MOVE) !== -1:
+          this.IN_GO_WAITING = false;
+          this.resultBuffer += textChunk;
+          this.callback(null, this.resultBuffer);
+          this.resultBuffer = ""; // 清空缓存
+          break;
+
+        // 如果含bestmove，则为结束
+        case this.resultBuffer.indexOf(BEST_MOVE) !== -1:
+          this.IN_GO_WAITING = false;
+          this.resultBuffer += textChunk;
+          this.callback(null, this.resultBuffer);
+          this.resultBuffer = ""; // 清空缓存
+          break;
+
+        // 如果含INFO，则将信息buffer后继续，不callback，继续接
+        case this.resultBuffer.indexOf(INFO) !== -1:
+          this.resultBuffer += textChunk;
+          break;
+
+        default:
+          if (!this.IN_GO_WAITING) {
+            // 又没有bestmove,又没有info，则是其它指令，直接返回吧。
+            if (this.callback) {
+              // When first startup, if there is console response,
+              // then callback is null. Might cause error.
+              this.callback(null, textChunk);
+            }
+          } else {
+            // 还是INFO的等待返回中，必须继续等
+            this.resultBuffer += textChunk;
+          }
+          break;
+      }
+    });
+    this.connect(false);
+  }
+
+  public send(
+    command: string,
+    callbackFun: (err: Error, data: string) => void
+  ) {
+    if (command === RESTART_COMMAND) {
+      this.IN_GO_WAITING = false;
+      callbackFun(null, "Server might be restared.");
+      return;
+    }
+    this.callback = callbackFun;
+    this.posProc.stdin.write(command + "\n");
+    // console.log('callback is: ', callback)
+
+    switch (true) {
+      case command.indexOf(UCCI) !== -1:
+        break;
+      case command.indexOf(IS_READY) !== -1:
+        break;
+      case command.indexOf(GO) !== -1:
+        this.IN_GO_WAITING = true;
+        break;
+      case command.indexOf(STOP) !== -1:
+        // This must have an imediate bestmove response, so do not callback now.
+        // console.log("Calculation stops ....");
+        this.IN_GO_WAITING = false;
+        break;
+
+      default:
+        // When command with no resonpse, such as position,
+        // send http response instead, to prevent forever waiting
+        this.callback(null, "There is no reponse.");
+        break;
+    }
+  }
+  public async sendAsync(command: string): Promise<string> {
+    return new Promise<string>((resolve) => {
+      this.send(command, (err, data) => {
+        if (!err) {
+          resolve(data);
+        } else {
+          resolve("");
+        }
+      });
+    });
+  }
+
+  public async infoAndMove(
+    fen: string,
+    depth: number
+  ): Promise<InfoAndMove | null> {
+    return new Promise<InfoAndMove | null>((resolve) => {
+      this.send(`position fen ${fen}`, (err, _) => {
+        if (!err) {
+          this.send(`go depth ${depth}`,(err, lines) => {
+            const infoList:Array<Info> = [];
+            const infoAndMove: InfoAndMove = {
+              infoList:infoList,
+              bestmove:'',
+              ponder:''
+            };
+            lines.split('\n').forEach(l => {
+              if(l.startsWith('info')){
+                const infoLine = l.split(" ")
+                infoList.push({
+                  depth: parseInt(infoLine[2]),
+                  score: parseInt(infoLine[4]),
+                  pv: infoLine[6]
+                })
+              }else if(l.startsWith('bestmove')){
+                const bestmove = l.split(" ");
+                infoAndMove.bestmove = bestmove[1];
+                infoAndMove.ponder = bestmove[3];
+              }
+            });
+            resolve(infoAndMove);
+          });
+        } else {
+          resolve(null);
+        }
+      });
+    });
+  }
+
+  public quit() {
+    if (!this.release) {
+      this.posProc.on("exit", function (code) {
+        // console.log("Closed with code: ", code);
+      });
+    }
+    this.send("quit", (err, data) => {
+      // console.log(data);
+    });
+  }
+}
+
+import path from "path";
+let engineFilePath = "";
+if (process.env.NODE_ENV === "development" || !process.resourcesPath) {
+  engineFilePath = path.join(
+    process.cwd(),
+    "/assets/engine",
+    "/ElephantEye/BIN/ELEEYE.EXE"
+  );
+} else {
+  engineFilePath = path.join(
+    process.resourcesPath,
+    "/engine",
+    "/ElephantEye/BIN/ELEEYE.EXE"
+  );
+}
+
+export const GetELEEYEEngine = () => new UCCIEngine(engineFilePath);

@@ -1,7 +1,109 @@
+html,
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica,
+  height: 100%;
+}
+#root {
+  height: 100%;
+}
+* {
+  margin: 0px;
+  padding: 0px;
+  user-select: none;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
     Arial, sans-serif;
   margin: auto;
-  max-width: 38rem;
-  padding: 2rem;
+  /* max-width: 38rem;
+  padding: 2rem; */
+}
+
+.welcome {
+  background-image: url("../../assets/img/bg.jpg");
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+  height: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+@font-face {
+  font-family: "longyinshoushu"; /* 重命名字体名 */
+  src: url("../../assets/font/1645201229.ttf");
+  font-weight: normal;
+  font-style: normal;
+}
+.welcome .title {
+  font-family: "longyinshoushu";
+  display: flex;
+  justify-content: center;
+  /* align-content:center; */
+  height: 100px;
+}
+.welcome .title span {
+  font-size: 90px;
+  line-height: 100px;
+}
+
+.menu_box a {
+  width: 214px;
+  height: 46px;
+  text-align: center;
+  display: block;
+  color: rgb(255, 138, 0);
+  cursor: pointer;
+  background: url(../../assets/img/btn_bg.png) center 0px no-repeat;
+  margin: 10px 0px 10px 45px;
+  line-height: 46px;
+  text-decoration: none;
+}
+.menu_box a:hover {
+  background: url(../../assets/img/btn_bg.png) center -46px no-repeat;
+  color: #ffa433;
+}
+.stack {
+  display: flex;
+  justify-content: center;
+  /* display: flex; */
+}
+
+.menu {
+  padding: 30px 0px;
+}
+
+.board {
+  border-width: 12px;
+  border-style: solid;
+  border-radius: 6px;
+  width: 320px;
+  border-image: linear-gradient(135deg, #9c5e1396, #472b0896) 1;
+  background-image: url(../../assets//img/bg1.jpg);
+  box-shadow: 5px 5px 5px #472b0896;
+}
+.menu_box {
+  padding: 10px;
+}
+
+.chessboard {
+  background-image: url("../../assets/img/Common_Bg_Main.jpg");
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+  height: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.chessboard a.back{
+  background: url(../../assets/img/command_btn.png) -182px -76px;
+  width: 66px;
+  height: 72px;
+  /* border: 1px solid black; */
+}
+
+.chessboard a.back:hover {
+  background: url(../../assets/img/command_btn.png) -0px -152px;
+  width: 66px;
+  height: 72px;
+  /* border: 1px solid black; */
 }
