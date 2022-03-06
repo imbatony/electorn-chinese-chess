@@ -1,8 +1,16 @@
 import * as React from 'react';
-import * as ReactDOM from 'react-dom';
-
-function render() {
-  ReactDOM.render(<h2>中国象棋</h2>, document.getElementById("root"));
+import { render } from 'react-dom';
+import { HashRouter, Link, Route, Routes } from "react-router-dom";
+import Welcome from "./Welcome";
+import Board from "./Board";
+const App = () => {
+    return <>
+        <HashRouter>
+            <Routes>
+                <Route path='/' element={<Welcome/>} />
+                <Route path='/board/:difficulty' element={<Board/>}/>
+            </Routes>
+        </HashRouter>
+    </>
 }
-
-render(); 
+render(<App/>, document.getElementById("root"));

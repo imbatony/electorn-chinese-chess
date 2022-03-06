@@ -1,7 +1,10 @@
 module.exports = {
     "packagerConfig": {
         "name": "中国象棋",
-        "icon": "./assets/img/chess.ico"
+        "icon": "./assets/img/chess.ico",
+        "extraResource":  [
+            './assets/engine'
+        ],
     },
     "makers": [
         {
