@@ -8,7 +8,7 @@ name: Build Release
 
 jobs:
   build:
-    name: Upload Release Asset
+    name: Build Release & Upload Assets
     runs-on: windows-latest
     strategy:
       matrix:
@@ -22,14 +22,14 @@ jobs:
           strip_v: true
       - name: Use tag
         run: echo ${{steps.tag.outputs.tag}}
-      # - name: Checkout code
-      #   uses: actions/checkout@v2
-      # - name: Build project Use Node.js ${{ matrix.node-version }}
-      #   uses: actions/setup-node@v2
-      #   with:
-      #     node-version: ${{ matrix.node-version }}
-      #     cache: 'npm'
-      # - run: npm make
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Build project Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v2
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+      - run: npm make
       - name: Create Release
         id: create_release
         uses: actions/create-release@v1
@@ -40,13 +40,23 @@ jobs:
           release_name: ${{steps.tag.outputs.tag}}
           draft: false
           prerelease: false
-      # - name: Upload Release Asset
-      #   id: upload-release-asset 
-      #   uses: actions/upload-release-asset@v1
-      #   env:
-      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      #   with:
-      #     upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
-      #     asset_path: ./my-artifact.zip
-      #     asset_name: my-artifact.zip
-      #     asset_content_type: application/zip
+      - name: Upload Windows Zip Package
+        id: upload-release-asset 
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
+          asset_path: ./out/zip/win32/x64/乐乐象棋-win32-x64-${{steps.tag.outputs.tag}}.zip
+          asset_name: 乐乐象棋-win32-x64-${{steps.tag.outputs.tag}}.zip
+          asset_content_type: application/zip
+      - name: Upload Windows SetUp Package
+        id: upload-release-asset 
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
+          asset_path: .out/make/squirrel.windows/x64/乐乐象棋-${{steps.tag.outputs.tag}} Setup.exe
+          asset_name: 乐乐象棋-${{steps.tag.outputs.tag}} Setup.exe
+          asset_content_type: application/octet-stream
