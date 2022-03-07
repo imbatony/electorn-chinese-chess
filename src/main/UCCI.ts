@@ -15,14 +15,18 @@ export type UCCICallback = (err: Error, data: string) => void;
 export interface Info {
   depth: number;
   score: number;
-  pv: string;
+  pv: Array<string>;
 }
 export interface InfoAndMove {
-  infoList: Array<Info>;
+  nodes: number;
+  pvList: Array<Info>;
+  time: number;
   bestmove: string;
   ponder: string;
 }
-
+/**
+ * https://www.xqbase.com/protocol/cchess_ucci.htm
+ */
 export class UCCIEngine {
   private callback: UCCICallback;
   private resultBuffer = "";
@@ -186,34 +190,45 @@ export class UCCIEngine {
 
   public async infoAndMove(
     fen: string,
-    depth: number
+    depth = 10,
+    timeout = 2000,
+    ndoes = 100000
   ): Promise<InfoAndMove | null> {
     return new Promise<InfoAndMove | null>((resolve) => {
       this.send(`position fen ${fen}`, (err, _) => {
         if (!err) {
-          this.send(`go depth ${depth}`, (err, lines) => {
-            const infoList: Array<Info> = [];
-            const infoAndMove: InfoAndMove = {
-              infoList: infoList,
-              bestmove: "",
-              ponder: "",
-            };
-            lines.split("\n").forEach((l) => {
-              if (l.startsWith("info")) {
-                const infoLine = l.split(" ");
-                infoList.push({
-                  depth: parseInt(infoLine[2]),
-                  score: parseInt(infoLine[4]),
-                  pv: infoLine[6],
-                });
-              } else if (l.startsWith("bestmove")) {
-                const bestmove = l.split(" ");
-                infoAndMove.bestmove = bestmove[1];
-                infoAndMove.ponder = bestmove[3];
-              }
-            });
-            resolve(infoAndMove);
-          });
+          this.send(
+            `go depth ${depth} nodes ${ndoes} time ${timeout}`,
+            (err, lines) => {
+              console.log(lines);
+              const infoList: Array<Info> = [];
+              const infoAndMove: InfoAndMove = {
+                nodes: 0,
+                time: 0,
+                pvList: new Array<Info>(),
+                bestmove: "",
+                ponder: "",
+              };
+              lines.split("\n").forEach((l) => {
+                if (l.startsWith("info time")) {
+                  const infoLine = l.split(" ");
+                  infoAndMove.time = parseInt(infoLine[2]);
+                  infoAndMove.nodes = parseInt(infoLine[4]);
+                } else if (l.startsWith("info depth")) {
+                  const infoLine = l.split(" ");
+                  const depth = parseInt(infoLine[2]);
+                  const score = parseInt(infoLine[4]);
+                  const pv = infoLine.slice(6);
+                  infoAndMove.pvList.push({ depth, score, pv });
+                } else if (l.startsWith("bestmove")) {
+                  const bestmove = l.split(" ");
+                  infoAndMove.bestmove = bestmove[1];
+                  infoAndMove.ponder = bestmove[3];
+                }
+              });
+              resolve(infoAndMove);
+            }
+          );
         } else {
           resolve(null);
         }
