@@ -1,7 +1,7 @@
 {
   "name": "electorn-chinese-chess",
   "productName": "乐乐象棋",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "乐乐象棋",
   "main": ".webpack/main",
   "scripts": {
