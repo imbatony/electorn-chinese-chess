@@ -8,9 +8,12 @@ on:
     branches: [ main ]
     paths:
       - "src/**"
+      - "test/**"
       - "assets/**"
       - "forge.config.js"
       - "tsconfig.**"
+      - "webpack.**"
+      - "package.json"
   pull_request:
     branches: [ main ]
 
