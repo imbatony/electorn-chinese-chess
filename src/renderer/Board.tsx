@@ -1,10 +1,11 @@
+import { BoardStatus, BoardStatusKey } from "../common/IPCInfos";
 import * as React from 'react';
 import { useState, useMemo, useRef } from 'react';
 const { ipcRenderer } = window.require('electron');
 import { useParams } from 'react-router-dom';
 import { Stage, Layer, Image, Rect } from 'react-konva';
 import { FEN } from '../common/Fen';
-import { BasePiece, PieceArray } from '../common/Pieces';
+import { PieceArray } from '../common/Pieces';
 import { ICCSToPoints } from '../common/ICCS';
 import { ChessSelected, ChessMoving } from './Animation';
 import Konva from 'konva';
@@ -23,33 +24,42 @@ function usePosition(x: number, y: number): [Position, (x: number, y: number) =>
     return [position, setPoint];
 }
 
-function useFEN(fenParam: string): [string, boolean, readonly (readonly number[])[], (x: number, y: number, tx: number, ty: number) => void, () => void, boolean] {
+function useFEN(fenParam: string): [string, boolean, readonly (readonly number[])[], (x: number, y: number, tx: number, ty: number) => void, () => void, boolean, () => void] {
     const fenInit = new FEN(fenParam);
     const [fenArray, setFenArray] = useState([fenInit]);
     const [index, setIndex] = useState(0);
 
-    const fen = useMemo(() => {
+    const [fen, fenStr, redTurn, chessArray] = useMemo(() => {
         const fen = fenArray[index];
-        return fen
+        return [fen, fen.getFenWithMove(), fen.isRedTurn(), fen.getChessArray()]
     }, [index])
 
     const canback = useMemo(() => {
         return index > 1
     }, [index])
 
-    function push(x: number, y: number, tx: number, ty: number) {
+    const push = React.useCallback((x: number, y: number, tx: number, ty: number) => {
+        console.log(index)
         const newFen = FEN.UpdateFen(fen, x, y, tx, ty);
         console.log('new fen:', newFen.getFen())
         fenArray[index + 1] = newFen;
         setIndex(index + 1);
-    }
+    }, [index, fen]);
 
-    function back() {
+    const back = React.useCallback(() => {
         if (canback) {
+            console.log('back to', index - 2);
             setIndex(index - 2);
         }
-    }
-    return [fen.getFenWithMove(), fen.isRedTurn(), fen.getChessArray(), push, back, canback]
+    }, [index, fen])
+
+    const restart = React.useCallback(() => {
+        if (canback) {
+            console.log('back to', 0);
+            setIndex(0);
+        }
+    }, [index, fen])
+    return [fenStr, redTurn, chessArray, push, back, canback, restart]
 }
 
 const Board = () => {
@@ -57,7 +67,7 @@ const Board = () => {
     const difficulty = params.difficulty;
     const fenParams = params.fen;
     const red: boolean = (params.red ?? 'true') === 'true';
-    const [fenStr, turn, board, push, back, canback] = useFEN(fenParams)
+    const [fenStr, turn, board, push, back, canback, restart] = useFEN(fenParams)
 
     const [mouseMove, setMouseMove] = usePosition(-1, -1);
     const [select, setSelect] = usePosition(-1, -1);
@@ -76,6 +86,14 @@ const Board = () => {
         }
     }, [turn, fenStr, select, selected])
 
+    ipcRenderer.on('op:back', () => {
+        console.log('op:back')
+        back();
+    })
+    ipcRenderer.on('op:restart', () => {
+        console.log('op:restart')
+        restart();
+    })
     React.useEffect(() => {
         if (turn !== red) {
             // 渲染进程
@@ -101,6 +119,8 @@ const Board = () => {
                 }, 500);
             })
         }
+        const boardStatus: BoardStatus = { canBack: canback, isEnd: false, curFen: fenStr };
+        ipcRenderer.invoke(BoardStatusKey, boardStatus)
     }, [turn, fenStr])
 
     const clickBoard = (evt: Konva.KonvaEventObject<MouseEvent>) => {

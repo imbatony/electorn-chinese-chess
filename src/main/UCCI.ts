@@ -201,7 +201,6 @@ export class UCCIEngine {
             `go depth ${depth} nodes ${ndoes} time ${timeout}`,
             (err, lines) => {
               console.log(lines);
-              const infoList: Array<Info> = [];
               const infoAndMove: InfoAndMove = {
                 nodes: 0,
                 time: 0,

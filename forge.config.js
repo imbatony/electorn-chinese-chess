@@ -1,9 +1,10 @@
 module.exports = {
     "packagerConfig": {
         "name": "乐乐象棋",
-        "icon": "./assets/img/chess.ico",
+        "icon": "./assets/img/ICON.ico",
         "extraResource":  [
-            './assets/engine'
+            './assets/engine',
+            './assets/img/ICON.png'
         ],
     },
     "makers": [
@@ -40,6 +41,11 @@ module.exports = {
                             "html": "./src/renderer/index.html",
                             "js": "./src/renderer/index.ts",
                             "name": "main_window"
+                        },
+                        {
+                            "html": "./src/renderer/about.html",
+                            "js": "./src/renderer/about.ts",
+                            "name": "about_window"
                         }
                     ]
                 }
