@@ -1,7 +1,7 @@
 import {
-  ChessArray,
-  ChessCodeMap,
-  ChessIndexMap,
+  PieceArray,
+  PieceCodeMap,
+  PieceIndexMap,
   Advisor,
   King,
   Bishop,
@@ -30,17 +30,17 @@ test("Test King", () => {
   expect(black.GetChineseMovementName(4, 0, 4, 1, board)).toBe(
     "将5进1"
   );
-  let m = red.GetAvailableMovement(5, 9, board, ChessArray);
+  let m = red.GetAvailableMovement(5, 9, board, PieceArray);
   expect(m.length).toBe(1)
   expect(m).toContainEqual([5, 8]);
-  m = black.GetAvailableMovement(4, 0, board, ChessArray);
+  m = black.GetAvailableMovement(4, 0, board, PieceArray);
   expect(m.length).toBe(2)
   expect(m).toContainEqual([4, 1]);
   expect(m).toContainEqual([3, 0]);
   
   fen = new FEN("3k5/9/9/9/9/9/9/3A5/9/4K4 w");
   board = fen.getChessArray();
-  m = red.GetAvailableMovement(4,9,board,ChessArray);
+  m = red.GetAvailableMovement(4,9,board,PieceArray);
   expect(m.length).toBe(3)
   expect(m).toContainEqual([4, 8]);
   expect(m).toContainEqual([5, 9]);
@@ -48,13 +48,13 @@ test("Test King", () => {
 
   fen = new FEN("3k5/9/9/9/9/9/9/9/4A4/3CK4 w");
   board = fen.getChessArray();
-  m = red.GetAvailableMovement(4,9,board,ChessArray);
+  m = red.GetAvailableMovement(4,9,board,PieceArray);
   expect(m.length).toBe(1)
   expect(m).toContainEqual([5, 9]);
 
   fen = new FEN("3k5/9/9/9/9/9/9/3C5/4A4/4K4 w");
   board = fen.getChessArray();
-  m = red.GetAvailableMovement(4,9,board,ChessArray);
+  m = red.GetAvailableMovement(4,9,board,PieceArray);
   expect(m.length).toBe(2)
   expect(m).toContainEqual([5, 9]);
   expect(m).toContainEqual([3, 9]);
