@@ -6,14 +6,17 @@ name: Node.js CI
 on:
   push:
     branches: [ main ]
+    paths:
+      - "src/**"
+      - "assets/**"
+      - "forge.config.js"
+      - "tsconfig.**"
   pull_request:
     branches: [ main ]
 
 jobs:
   build:
-
     runs-on: windows-latest
-
     strategy:
       matrix:
         node-version: [16.x]
@@ -28,3 +31,4 @@ jobs:
         cache: 'npm'
     - run: npm install
     - run: npm test
+    - run: npm make

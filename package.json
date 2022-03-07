@@ -1,8 +1,8 @@
 {
   "name": "electorn-chinese-chess",
-  "productName": "electorn-chinese-chess",
-  "version": "1.0.0",
-  "description": "My Electron application description",
+  "productName": "乐乐象棋",
+  "version": "0.0.1",
+  "description": "乐乐象棋",
   "main": ".webpack/main",
   "scripts": {
     "start": "electron-forge start",

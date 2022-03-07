@@ -47,13 +47,13 @@ export class UCCIEngine {
     console.log("In init ...", this.UCCI_ENGINE_LOCATION);
     this.posProc = spawn(this.UCCI_ENGINE_LOCATION, []);
 
-    this.posProc.stdout.once("data", (data: any) => {
-      const textChunk = data.toString("utf8");
-      // console.log("data once received from engine: ", textChunk);
-    });
+    // this.posProc.stdout.once("data", (data: any) => {
+    //   const textChunk = data.toString("utf8");
+    //   // console.log("data once received from engine: ", textChunk);
+    // });
 
     this.posProc.on("exit", (code) => {
-      // console.log("Closed with code: ", code);
+      console.log("Closed with code: ", code);
       // console.log("Restarting");
       this.init(); // Restart ...
       this.callback(null, "Restarted ...");

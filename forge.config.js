@@ -1,6 +1,6 @@
 module.exports = {
     "packagerConfig": {
-        "name": "中国象棋",
+        "name": "乐乐象棋",
         "icon": "./assets/img/chess.ico",
         "extraResource":  [
             './assets/engine'
@@ -15,9 +15,9 @@ module.exports = {
         },
         {
             "name": "@electron-forge/maker-zip",
-            "platforms": [
-                "darwin"
-            ]
+            // "platforms": [
+            //     "darwin"
+            // ]
         },
         {
             "name": "@electron-forge/maker-deb",
@@ -38,7 +38,7 @@ module.exports = {
                     "entryPoints": [
                         {
                             "html": "./src/renderer/index.html",
-                            "js": "./src/renderer/renderer.ts",
+                            "js": "./src/renderer/index.ts",
                             "name": "main_window"
                         }
                     ]
