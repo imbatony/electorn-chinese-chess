@@ -9,19 +9,24 @@ export const IS_READY = "isready";
 export const GO = "go";
 export const STOP = "stop";
 export const RESTART_COMMAND = "restart-ucci";
+export const QUIT = "quit";
 
 export type UCCICallback = (err: Error, data: string) => void;
 export interface Info {
   depth: number;
   score: number;
-  pv: string;
+  pv: Array<string>;
 }
 export interface InfoAndMove {
-  infoList: Array<Info>;
+  nodes: number;
+  pvList: Array<Info>;
+  time: number;
   bestmove: string;
   ponder: string;
 }
-
+/**
+ * https://www.xqbase.com/protocol/cchess_ucci.htm
+ */
 export class UCCIEngine {
   private callback: UCCICallback;
   private resultBuffer = "";
@@ -35,16 +40,16 @@ export class UCCIEngine {
   }
 
   private connect(delayed: boolean) {
-    if (!delayed) {
+    if (!delayed && !this.release) {
       // console.log("Waiting for 3 seconds ...");
-      setTimeout(this.connect, 3000, true);
+      setTimeout(this.connect, 1000, true);
     }
     //   posProc.stdin.setEncoding = "utf-8";
     this.release = false;
     // console.log("UCCI Engine started.");
   }
   private init() {
-    console.log("In init ...", this.UCCI_ENGINE_LOCATION);
+    // console.log("In init ...", this.UCCI_ENGINE_LOCATION);
     this.posProc = spawn(this.UCCI_ENGINE_LOCATION, []);
 
     this.posProc.stdout.once("data", (data: any) => {
@@ -55,8 +60,10 @@ export class UCCIEngine {
     this.posProc.on("exit", (code) => {
       // console.log("Closed with code: ", code);
       // console.log("Restarting");
-      this.init(); // Restart ...
-      this.callback(null, "Restarted ...");
+      if (!this.release) {
+        this.init(); // Restart ...
+        this.callback(null, "Restarted ...");
+      }
     });
 
     this.posProc.stdout.on("data", (data: any) => {
@@ -98,6 +105,21 @@ export class UCCIEngine {
           this.resultBuffer += textChunk;
           break;
 
+        // 如果含ucciok，则为结束
+        case this.resultBuffer.indexOf("ucciok") !== -1:
+          this.IN_GO_WAITING = false;
+          this.resultBuffer += textChunk;
+          this.callback(null, this.resultBuffer);
+          this.resultBuffer = ""; // 清空缓存
+          break;
+        // 如果含bye，则为结束
+        case this.resultBuffer.indexOf("bye") !== -1:
+          this.IN_GO_WAITING = false;
+          this.resultBuffer += textChunk;
+          this.callback(null, this.resultBuffer);
+          this.resultBuffer = ""; // 清空缓存
+          break;
+
         default:
           if (!this.IN_GO_WAITING) {
             // 又没有bestmove,又没有info，则是其它指令，直接返回吧。
@@ -131,10 +153,14 @@ export class UCCIEngine {
 
     switch (true) {
       case command.indexOf(UCCI) !== -1:
+        this.IN_GO_WAITING = false;
         break;
       case command.indexOf(IS_READY) !== -1:
         break;
       case command.indexOf(GO) !== -1:
+        this.IN_GO_WAITING = true;
+        break;
+      case command.indexOf(QUIT) !== -1:
         this.IN_GO_WAITING = true;
         break;
       case command.indexOf(STOP) !== -1:
@@ -164,34 +190,45 @@ export class UCCIEngine {
 
   public async infoAndMove(
     fen: string,
-    depth: number
+    depth = 10,
+    timeout = 2000,
+    ndoes = 100000
   ): Promise<InfoAndMove | null> {
     return new Promise<InfoAndMove | null>((resolve) => {
       this.send(`position fen ${fen}`, (err, _) => {
         if (!err) {
-          this.send(`go depth ${depth}`,(err, lines) => {
-            const infoList:Array<Info> = [];
-            const infoAndMove: InfoAndMove = {
-              infoList:infoList,
-              bestmove:'',
-              ponder:''
-            };
-            lines.split('\n').forEach(l => {
-              if(l.startsWith('info')){
-                const infoLine = l.split(" ")
-                infoList.push({
-                  depth: parseInt(infoLine[2]),
-                  score: parseInt(infoLine[4]),
-                  pv: infoLine[6]
-                })
-              }else if(l.startsWith('bestmove')){
-                const bestmove = l.split(" ");
-                infoAndMove.bestmove = bestmove[1];
-                infoAndMove.ponder = bestmove[3];
-              }
-            });
-            resolve(infoAndMove);
-          });
+          this.send(
+            `go depth ${depth} nodes ${ndoes} time ${timeout}`,
+            (err, lines) => {
+              console.log(lines);
+              const infoList: Array<Info> = [];
+              const infoAndMove: InfoAndMove = {
+                nodes: 0,
+                time: 0,
+                pvList: new Array<Info>(),
+                bestmove: "",
+                ponder: "",
+              };
+              lines.split("\n").forEach((l) => {
+                if (l.startsWith("info time")) {
+                  const infoLine = l.split(" ");
+                  infoAndMove.time = parseInt(infoLine[2]);
+                  infoAndMove.nodes = parseInt(infoLine[4]);
+                } else if (l.startsWith("info depth")) {
+                  const infoLine = l.split(" ");
+                  const depth = parseInt(infoLine[2]);
+                  const score = parseInt(infoLine[4]);
+                  const pv = infoLine.slice(6);
+                  infoAndMove.pvList.push({ depth, score, pv });
+                } else if (l.startsWith("bestmove")) {
+                  const bestmove = l.split(" ");
+                  infoAndMove.bestmove = bestmove[1];
+                  infoAndMove.ponder = bestmove[3];
+                }
+              });
+              resolve(infoAndMove);
+            }
+          );
         } else {
           resolve(null);
         }
@@ -199,15 +236,14 @@ export class UCCIEngine {
     });
   }
 
-  public quit() {
+  public async quit() {
     if (!this.release) {
-      this.posProc.on("exit", function (code) {
-        // console.log("Closed with code: ", code);
-      });
+      this.release = true;
+      await this.sendAsync("quit");
+      if (!this.posProc.killed) {
+        this.posProc.kill();
+      }
     }
-    this.send("quit", (err, data) => {
-      // console.log(data);
-    });
   }
 }
 
