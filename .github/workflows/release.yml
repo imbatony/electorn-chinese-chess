@@ -30,7 +30,7 @@ jobs:
           node-version: ${{ matrix.node-version }}
           cache: 'npm'
       - run: npm install
-      - run: npm run make
+      - run: npm run make:prod
       - name: Create Release
         id: create_release
         uses: actions/create-release@v1
