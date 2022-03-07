@@ -48,7 +48,7 @@ jobs:
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
           asset_path: ./out/make/zip/win32/x64/乐乐象棋-win32-x64-${{steps.tag.outputs.tag}}.zip
-          asset_name: 乐乐象棋-win32-x64-${{steps.tag.outputs.tag}}.zip
+          asset_name: windows-win32-x64-${{steps.tag.outputs.tag}}.zip
           asset_content_type: application/zip
       - name: Upload Windows SetUp Package
         uses: actions/upload-release-asset@v1
@@ -57,5 +57,5 @@ jobs:
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
           asset_path: ./out/make/squirrel.windows/x64/乐乐象棋-${{steps.tag.outputs.tag}} Setup.exe
-          asset_name: 乐乐象棋-${{steps.tag.outputs.tag}} Setup.exe
+          asset_name: windows-${{steps.tag.outputs.tag}} Setup.exe
           asset_content_type: application/octet-stream
