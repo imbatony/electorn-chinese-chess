@@ -116,13 +116,21 @@ const template: Array<MenuItemConstructorOptions | MenuItem> = [
         click: () => {
           mainWindow.webContents.send("op:back");
         },
-        // enabled: false,
+        enabled: false,
       },
       {
         id: "op:restart",
         label: "重新开始",
         click: () => {
           mainWindow.webContents.send("op:restart");
+        },
+        enabled: false,
+      },
+      {
+        id: "op:rotation",
+        label: "翻转",
+        click: () => {
+          mainWindow.webContents.send("op:rotation");
         },
         enabled: false,
       },
@@ -157,13 +165,13 @@ Menu.setApplicationMenu(menu);
 ipcMain.on("close-me", (_evt, _arg): void => {
   app.quit();
 });
-ipcMain.handle("queryMove", async (event, fenStr) => {
+ipcMain.handle("queryMove", async (event, fenStr, difficulty) => {
   // const result = await fetch(
   //   `http://www.chessdb.cn/chessdb.php?action=querybest&board=${fenStr}`
   // );
   // return await result.text();
-  console.log(fenStr);
-  const info = await eleeyeeEngine.infoAndMove(fenStr, 5);
+  console.log("recieve:", fenStr, " ,query engine to get best move");
+  const info = await eleeyeeEngine.infoAndMove(fenStr,1000*difficulty);
   if (info) {
     console.log(info.bestmove);
     return info.bestmove;
@@ -178,4 +186,5 @@ ipcMain.handle(BoardStatusKey, (_evt, status: BoardStatus) => {
   console.log(status);
   menu.getMenuItemById("op:back").enabled = status.canBack;
   menu.getMenuItemById("op:restart").enabled = true;
+  menu.getMenuItemById("op:rotation").enabled = true;
 });

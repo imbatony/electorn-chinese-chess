@@ -67,6 +67,9 @@ const Board = () => {
     const difficulty = params.difficulty;
     const fenParams = params.fen;
     const red: boolean = (params.red ?? 'true') === 'true';
+    const rotationParm: boolean = (params.red ?? 'true') === 'true';
+    console.log(rotationParm)
+    const [rotation, setRotation] = useState(rotationParm);
     const [fenStr, turn, board, push, back, canback, restart] = useFEN(fenParams)
 
     const [mouseMove, setMouseMove] = usePosition(-1, -1);
@@ -86,25 +89,17 @@ const Board = () => {
         }
     }, [turn, fenStr, select, selected])
 
-    ipcRenderer.on('op:back', () => {
-        console.log('op:back')
-        back();
-    })
-    ipcRenderer.on('op:restart', () => {
-        console.log('op:restart')
-        restart();
-    })
     React.useEffect(() => {
         if (turn !== red) {
             // 渲染进程
             console.log(fenStr);
-            ipcRenderer.invoke('queryMove', fenStr).then((move) => {
+            ipcRenderer.invoke('queryMove', fenStr, difficulty).then((move) => {
                 console.log("move:", move)
                 // ...
                 const ICCS = move;
                 const [x, y, tx, ty] = ICCSToPoints(ICCS)
                 const endX = x * spaceX + startX - chessSize / 2;
-                const endY = y * spaceY + startY - chessSize / 2;
+                const endY = (rotation ? y : 9 - y) * spaceY + startY - chessSize / 2;
                 console.log(x, y, tx, ty)
                 setOpSelect(x, y);
                 setTimeout(() => {
@@ -121,6 +116,21 @@ const Board = () => {
         }
         const boardStatus: BoardStatus = { canBack: canback, isEnd: false, curFen: fenStr };
         ipcRenderer.invoke(BoardStatusKey, boardStatus)
+        ipcRenderer.removeAllListeners('op:back');
+        ipcRenderer.on('op:back', () => {
+            console.log('op:back')
+            back();
+        })
+        ipcRenderer.removeAllListeners('op:restart');
+        ipcRenderer.on('op:restart', () => {
+            console.log('op:restart')
+            restart();
+        })
+        ipcRenderer.removeAllListeners('op:rotation');
+        ipcRenderer.on('op:rotation', () => {
+            console.log('op:rotation')
+            setRotation(!rotation);
+        })
     }, [turn, fenStr])
 
     const clickBoard = (evt: Konva.KonvaEventObject<MouseEvent>) => {
@@ -128,16 +138,21 @@ const Board = () => {
         // console.log(evt.evt.offsetX)
         // console.log(evt.evt.offsetY)
         const x = Math.ceil((evt.evt.offsetX - startX - spaceX / 2) / spaceX)
-        const y = Math.ceil((evt.evt.offsetY - startY - spaceY / 2) / spaceY)
+        let y = Math.ceil((evt.evt.offsetY - startY - spaceY / 2) / spaceY)
+        const positionY = y;
+        if (!rotation) {
+            y = 9 - y;
+        }
         if (selected && availableMovement.filter(([ax, ay]) => ax == x && ay == y).length === 1) {
             const endX = x * spaceX + startX - chessSize / 2;
-            const endY = y * spaceY + startY - chessSize / 2;
+            const endY = positionY * spaceY + startY - chessSize / 2;
             ChessMoving(chessRef.current, endX, endY, () => {
                 if (board[y][x] !== 0) {
                     eatSound.play();
                 } else {
                     clickSound.play();
                 }
+                console.log('push', select.x, ",", select.y, "->", x, ",", y)
                 push(select.x, select.y, x, y);
                 setSelect(-1, -1);
             })
@@ -165,12 +180,19 @@ const Board = () => {
     }, [mouseMove.x, mouseMove.y])
 
     const [redBoxX, redBoxY] = useMemo<[number, number]>(() => {
-        return [mouseMove.x * spaceX + startX - redBoxSize / 2, mouseMove.y * spaceY + startY - redBoxSize / 2]
+        let positionY = mouseMove.y;
+        if (!rotation) {
+            positionY = 9 - mouseMove.y;
+        }
+        return [mouseMove.x * spaceX + startX - redBoxSize / 2, positionY * spaceY + startY - redBoxSize / 2]
     }, [mouseMove.x, mouseMove.y])
 
     const mouseMoveBoard = (evt: Konva.KonvaEventObject<MouseEvent>) => {
         const x = Math.ceil((evt.evt.offsetX - startX - spaceX / 2) / spaceX)
-        const y = Math.ceil((evt.evt.offsetY - startY - spaceY / 2) / spaceY)
+        let y = Math.ceil((evt.evt.offsetY - startY - spaceY / 2) / spaceY)
+        if (!rotation) {
+            y = 9 - y;
+        }
         if (x != mouseMove.x || y != mouseMove.y) {
             setMouseMove(x, y)
         }
@@ -188,14 +210,17 @@ const Board = () => {
                             return l.map((e, x) => {
                                 // console.log(e)
                                 if (e > 0) {
+                                    const imageX = x * spaceX + startX - chessSize / 2;
+                                    const imageY = (rotation ? y : 9 - y) * spaceY + startY - chessSize / 2;
                                     if (x == select.x && y == select.y) {
-                                        return <Image key={`${x}_${y}`} ref={chessRef} image={ChessImageArray[e - 1]} x={x * spaceX + startX - chessSize / 2} y={y * spaceY + startY - chessSize / 2} ></Image>
+
+                                        return <Image key={`${x}_${y}`} ref={chessRef} image={ChessImageArray[e - 1]} x={imageX} y={imageY} ></Image>
                                     }
                                     else if (x == opSelect.x && y == opSelect.y) {
-                                        return <Image key={`${x}_${y}`} ref={opChessRef} image={ChessImageArray[e - 1]} x={x * spaceX + startX - chessSize / 2} y={y * spaceY + startY - chessSize / 2} ></Image>
+                                        return <Image key={`${x}_${y}`} ref={opChessRef} image={ChessImageArray[e - 1]} x={imageX} y={imageY} ></Image>
                                     }
                                     else {
-                                        return <Image key={`${x}_${y}`} image={ChessImageArray[e - 1]} x={x * spaceX + startX - chessSize / 2} y={y * spaceY + startY - chessSize / 2} ></Image>
+                                        return <Image key={`${x}_${y}`} image={ChessImageArray[e - 1]} x={imageX} y={imageY} ></Image>
                                     }
                                 }
                                 else {
@@ -206,19 +231,20 @@ const Board = () => {
                     </Layer>
                 }
                 {showSelect ? <Layer>
-                    <Image image={RedBoxImage} x={select.x * spaceX + startX - chessSize / 2} y={select.y * spaceY + startY - chessSize / 2} />
+                    <Image image={RedBoxImage} x={select.x * spaceX + startX - chessSize / 2} y={(rotation ? select.y : 9 - select.y) * spaceY + startY - chessSize / 2} />
                 </Layer> : null}
                 {showRedBox ? <Layer>
                     <Image image={RedBoxImage} x={redBoxX} y={redBoxY} />
                 </Layer> : null}
                 {selected ? <Layer>
                     {availableMovement.map(([x, y], i) => {
-                        return <Image key={i} image={DotImage} x={x * spaceX + startX - DotImageOffsetX} y={y * spaceY + startY - DotImageOffsetY} />
+                        return <Image key={i} image={DotImage} x={x * spaceX + startX - DotImageOffsetX} y={(rotation ? y : 9 - y) * spaceY + startY - DotImageOffsetY} />
                     })}
 
                 </Layer> : null}
                 <Layer>
-                    <Rect width={boardWith + boardOffSetX} height={boardHeight + boardOffSetY} onMouseMove={mouseMoveBoard} onClick={clickBoard} _useStrictMode />
+                    {/* <Rect width={boardWith + boardOffSetX} height={boardHeight + boardOffSetY} onMouseMove={mouseMoveBoard} onClick={clickBoard} _useStrictMode /> */}
+                    <Rect width={boardWith + boardOffSetX} height={boardHeight + boardOffSetY} onClick={clickBoard} _useStrictMode />
                 </Layer>
             </Stage>
         </div>

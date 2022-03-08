@@ -190,15 +190,13 @@ export class UCCIEngine {
 
   public async infoAndMove(
     fen: string,
-    depth = 10,
-    timeout = 2000,
-    ndoes = 100000
+    timeout = 5000,
   ): Promise<InfoAndMove | null> {
     return new Promise<InfoAndMove | null>((resolve) => {
       this.send(`position fen ${fen}`, (err, _) => {
         if (!err) {
           this.send(
-            `go depth ${depth} nodes ${ndoes} time ${timeout}`,
+            `go time ${timeout}`,
             (err, lines) => {
               console.log(lines);
               const infoAndMove: InfoAndMove = {

@@ -4,6 +4,7 @@ const { ipcRenderer } = window.require('electron');
 import { Link } from 'react-router-dom';
 const Welcome = () => {
     const [step, setStep] = useState(1);
+    const [difficulty, setDifficulty] = useState(1);
     const clickCompat = () => {
         setStep(2);
     }
@@ -18,15 +19,21 @@ const Welcome = () => {
             </div>
         } else if (step === 2) {
             return <div className='menu_box'>
-                <Link to='/board/1'>初级水平</Link>
-                <Link to='/board/2'>中级水平</Link>
-                <Link to='/board/3'>高级水平</Link>
+                <a onClick={() => {setDifficulty(1);setStep(3)}}>初级水平</a>
+                <a onClick={() => {setDifficulty(2);setStep(3)}}>中级水平</a>
+                <a onClick={() => {setDifficulty(3);setStep(3)}}>高级水平</a>
                 <a onClick={() => setStep(1)}>上一步</a>
+            </div>
+        } else if (step === 3) {
+            return <div className='menu_box'>
+                <Link to={`/board/${difficulty}/true/true`}>执红</Link>
+                <Link to={`/board/${difficulty}/false/false`}>执黑</Link>
+                <a onClick={() => setStep(2)}>上一步</a>
             </div>
         }
     }
     return <div className='welcome'>
-        <div className='title' style={{padding:60}}>
+        <div className='title' style={{ padding: 60 }}>
             <span>中国象棋</span>
         </div>
         <div className='stack'>
