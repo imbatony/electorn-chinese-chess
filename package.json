@@ -1,7 +1,7 @@
 {
   "name": "electorn-chinese-chess",
   "productName": "乐乐象棋",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "description": "乐乐象棋是一款基于Electorn开发的开源象棋软件",
   "main": ".webpack/main",
   "homepage": "https://github.com/imbatony/electorn-chinese-chess",
