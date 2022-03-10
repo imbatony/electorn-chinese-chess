@@ -68,6 +68,10 @@ export abstract class BasePiece {
    */
   abstract GetCode(): string;
 
+  CanCheck(): boolean {
+    return false;
+  }
+
   /**
    * 是否是红方
    */
@@ -85,7 +89,7 @@ export abstract class BasePiece {
     x: number,
     y: number,
     board: ReadonlyArray<ReadonlyArray<number>>,
-    ChessArray: ReadonlyArray<BasePiece>
+    pieceArray: ReadonlyArray<BasePiece>
   ): Array<[number, number]>;
 }
 export const MovementNameArray: ReadonlyArray<string> = [
@@ -117,13 +121,13 @@ export const GetChineseMovementNameForSimpleChess = (
     positionTo = "" + move;
     if (isRed) {
       positionTo = MovementNameArray[move - 1];
-      positionFrom = MovementNameArray[8-x];
+      positionFrom = MovementNameArray[8 - x];
     }
   } else if (newX != x) {
     actionName = "平";
     if (isRed) {
       positionTo = MovementNameArray[newX];
-      positionFrom = MovementNameArray[8-x];
+      positionFrom = MovementNameArray[8 - x];
     }
   }
   return `${chessName}${positionFrom}${actionName}${positionTo}`;

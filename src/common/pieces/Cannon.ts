@@ -19,6 +19,9 @@ export class Cannon extends BasePiece {
   GetCode(): string {
     return this.isRed ? "C" : "c";
   }
+  CanCheck():boolean{
+    return true;
+  }
   GetAvailableMovement(
     x: number,
     y: number,

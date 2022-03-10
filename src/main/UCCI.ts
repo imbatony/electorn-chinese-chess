@@ -58,7 +58,7 @@ export class UCCIEngine {
     // });
 
     this.posProc.on("exit", (code) => {
-      console.log("Closed with code: ", code);
+      // console.log("Closed with code: ", code);
       // console.log("Restarting");
       if (!this.release) {
         this.init(); // Restart ...

@@ -31,6 +31,7 @@ export class FEN {
    * 盘面数组
    */
   private arr: Array<Array<number>>;
+
   /**
    * 检测fen码
    * @param s
@@ -177,9 +178,8 @@ export class FEN {
 
   getFenWithMove(): string {
     if (this.moves) {
-      return `${this.fenInit} - - 0 1 moves ${
-        this.moves
-      }`;
+      return `${this.fenInit} - - 0 1 moves ${this.moves
+        }`;
     } else {
       return `${this.fenInit} - - 0 1`;
     }
@@ -188,12 +188,92 @@ export class FEN {
   isRedTurn(): boolean {
     return this.turn;
   }
+
   isValid(): boolean {
     return this.valid;
   }
+
   getChessArray(): ReadonlyArray<ReadonlyArray<number>> {
     return this.arr;
   }
+
+  /**
+   * 是否某方将军
+   */
+  isChecking(isRed = this.isRedTurn()): boolean {
+    let [kingPostionX, kingPostionY] = [0, 0];
+    for (let i = 0; i < 8; i++) {
+      for (let j = 0; j < 9; j++) {
+        if (this.arr[j][i] != 0) {
+          const piece = PieceArray[this.arr[j][i] - 1];
+          if (piece.IsRed() !== isRed && piece.GetCode().toLowerCase() === 'k') {
+            [kingPostionX, kingPostionY] = [i, j];
+          }
+        }
+      }
+    }
+
+    for (let i = 0; i < 8; i++) {
+      for (let j = 0; j < 9; j++) {
+        if (this.arr[j][i] != 0) {
+          const piece = PieceArray[this.arr[j][i] - 1];
+          if (piece.IsRed() === isRed && piece.CanCheck()) {
+            const checkMovement = piece
+              .GetAvailableMovement(i, j, this.arr, PieceArray)
+              .filter(([x, y]) => x === kingPostionX && y === kingPostionY).length;
+            if (checkMovement > 0) {
+              return true;
+            }
+          }
+        }
+      }
+    }
+    return false;
+  }
+  /**
+   * 是否某方无棋可走
+   * @param isRed 
+   */
+  isNoMoving(isRed = this.isRedTurn()): boolean {
+    for (let i = 0; i < 8; i++) {
+      for (let j = 0; j < 9; j++) {
+        if (this.arr[j][i] != 0) {
+          const piece = PieceArray[this.arr[j][i] - 1];
+          if (piece.IsRed() === isRed) {
+            const movement = piece.GetAvailableMovement(i, j, this.arr, PieceArray).length
+            if (movement > 0) {
+              return false;
+            }
+          }
+        }
+      }
+    }
+    return true;
+  }
+
+
+  /**
+   * 
+   * @param isRed 是否某方将死对方
+   */
+  // isCheckmate(isRed = this.isRedTurn()): boolean {
+  //   for (let i = 0; i < 8; i++) {
+  //     for (let j = 0; j < 9; j++) {
+  //       if (this.arr[j][i] != 0) {
+  //         const piece = PieceArray[this.arr[j][i] - 1];
+  //         if (piece.IsRed() !== isRed) {
+  //           const movements = piece.GetAvailableMovement(i, j, this.arr, PieceArray)
+  //             if (movements.length > 0) {
+  //               for(let k =)
+  //             }
+          
+  //         }
+  //       }
+  //     }
+  //   }
+  // }
+
+
 
   printBoard(): void {
     for (const e of this.arr) {

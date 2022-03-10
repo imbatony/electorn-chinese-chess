@@ -19,9 +19,9 @@ const Welcome = () => {
             </div>
         } else if (step === 2) {
             return <div className='menu_box'>
-                <a onClick={() => {setDifficulty(1);setStep(3)}}>初级水平</a>
-                <a onClick={() => {setDifficulty(2);setStep(3)}}>中级水平</a>
-                <a onClick={() => {setDifficulty(3);setStep(3)}}>高级水平</a>
+                <a onClick={() => { setDifficulty(1); setStep(3) }}>初级水平</a>
+                <a onClick={() => { setDifficulty(2); setStep(3) }}>中级水平</a>
+                <a onClick={() => { setDifficulty(3); setStep(3) }}>高级水平</a>
                 <a onClick={() => setStep(1)}>上一步</a>
             </div>
         } else if (step === 3) {
