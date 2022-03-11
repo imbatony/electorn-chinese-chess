@@ -263,15 +263,15 @@ export class FEN {
    */
   isCheckmate(isRed = this.isRedTurn()): boolean {
     //遍历对方可移动的盘面，是否走了以后没有被将，则说明没将死
-    for (let i = 0; i < 8; i++) {
-      for (let j = 0; j < 9; j++) {
+    for (let i = 0; i <= 8; i++) {
+      for (let j = 0; j <= 9; j++) {
         if (this.arr[j][i] != 0) {
           const piece = PieceArray[this.arr[j][i] - 1];
           if (piece.IsRed() !== isRed) {
             const movements = piece.GetAvailableMovement(i, j, this.arr, PieceArray)
             if (movements.length > 0) {
               for (const [tx, ty] of movements) {
-                let nextFen = FEN.UpdateFen(this, i, j, tx, ty);
+                const nextFen = FEN.UpdateFen(this, i, j, tx, ty);
                 const noChecking = !nextFen.isChecking(isRed);
                 const noFacing = !nextFen.isKingFacing();
                 if (noChecking && noFacing) {

@@ -96,10 +96,6 @@ const Board = () => {
             winSound.play();
             alert("你赢了!")
         }
-        else if (fen.isCheckmate(!red)) {
-            loseSound.play();
-            alert("你输了!")
-        }
         else if (turn !== red) {
             // 渲染进程
             console.log(fenStr);
@@ -115,8 +111,12 @@ const Board = () => {
                 setOpSelect(x, y);
                 setTimeout(() => {
                     ChessMoving(opChessRef.current, endX, endY, () => {
-                        const checking = nextFen.isChecking(!turn);
-                        if (checking) {
+                        const checking = nextFen.isChecking(!red);
+                        const checkmate = nextFen.isCheckmate(!red);
+                        if (checkmate) {
+                            loseSound.play()
+                        }
+                        else if (checking) {
                             checkedSound.play()
                         }
                         else if (board[ty][tx] !== 0) {
@@ -125,6 +125,9 @@ const Board = () => {
                             clickSound.play();
                         }
                         push(x, y, tx, ty);
+                        if(checkmate){
+                            alert('你输了')
+                        }
                     })
                 }, 500);
             })
