@@ -9,7 +9,7 @@ import { PieceArray } from '../common/Pieces';
 import { ICCSToPoints } from '../common/ICCS';
 import { ChessSelected, ChessMoving } from './Animation';
 import Konva from 'konva';
-import { clickSound, selectSound, eatSound } from './Sound';
+import { clickSound, selectSound, eatSound, checkingSound, checkedSound, goErrorSound, winSound, loseSound, playBgm } from './Sound';
 import { DotImage, BGImage, ChessImageArray, RedBoxImage, boardHeight, boardWith, boardOffSetX, boardOffSetY, spaceX, spaceY, startX, startY, redBoxSize, chessSize, DotImageOffsetX, DotImageOffsetY } from './Images';
 
 interface Position {
@@ -24,14 +24,14 @@ function usePosition(x: number, y: number): [Position, (x: number, y: number) =>
     return [position, setPoint];
 }
 
-function useFEN(fenParam: string): [string, boolean, readonly (readonly number[])[], (x: number, y: number, tx: number, ty: number) => void, () => void, boolean, () => void] {
+function useFEN(fenParam: string): [FEN, string, boolean, boolean, readonly (readonly number[])[], (x: number, y: number, tx: number, ty: number) => void, () => void, boolean, () => void] {
     const fenInit = new FEN(fenParam);
     const [fenArray, setFenArray] = useState([fenInit]);
     const [index, setIndex] = useState(0);
 
-    const [fen, fenStr, redTurn, chessArray] = useMemo(() => {
+    const [fen, fenStr, redTurn, chessArray, isCheckmate] = useMemo(() => {
         const fen = fenArray[index];
-        return [fen, fen.getFenWithMove(), fen.isRedTurn(), fen.getChessArray()]
+        return [fen, fen.getFenWithMove(), fen.isRedTurn(), fen.getChessArray(), fen.isCheckmate()]
     }, [index])
 
     const canback = useMemo(() => {
@@ -59,7 +59,7 @@ function useFEN(fenParam: string): [string, boolean, readonly (readonly number[]
             setIndex(0);
         }
     }, [index, fen])
-    return [fenStr, redTurn, chessArray, push, back, canback, restart]
+    return [fen, fenStr, redTurn, isCheckmate, chessArray, push, back, canback, restart]
 }
 
 const Board = () => {
@@ -70,7 +70,7 @@ const Board = () => {
     const rotationParm: boolean = (params.red ?? 'true') === 'true';
     console.log(rotationParm)
     const [rotation, setRotation] = useState(rotationParm);
-    const [fenStr, turn, board, push, back, canback, restart] = useFEN(fenParams)
+    const [fen, fenStr, turn, isCheckmate, board, push, back, canback, restart] = useFEN(fenParams)
 
     const [mouseMove, setMouseMove] = usePosition(-1, -1);
     const [select, setSelect] = usePosition(-1, -1);
@@ -80,7 +80,9 @@ const Board = () => {
     const selected = useMemo<boolean>(() => {
         return select.x >= 0 && select.y >= 0 && board[select.y][select.x] > 0 && PieceArray[board[select.y][select.x] - 1].IsRed() === turn
     }, [turn, fenStr, select])
-
+    React.useEffect(() => {
+        playBgm('board')
+    }, [])
     const availableMovement = useMemo<Array<[number, number]>>(() => {
         if (!selected) {
             return [];
@@ -90,7 +92,11 @@ const Board = () => {
     }, [turn, fenStr, select, selected])
 
     React.useEffect(() => {
-        if (turn !== red) {
+        if (fen.isCheckmate(red)) {
+            winSound.play();
+            alert("你赢了!")
+        }
+        else if (turn !== red) {
             // 渲染进程
             console.log(fenStr);
             ipcRenderer.invoke('queryMove', fenStr, difficulty).then((move) => {
@@ -100,22 +106,38 @@ const Board = () => {
                 const [x, y, tx, ty] = ICCSToPoints(ICCS)
                 const endX = x * spaceX + startX - chessSize / 2;
                 const endY = (rotation ? y : 9 - y) * spaceY + startY - chessSize / 2;
+                const nextFen = FEN.UpdateFen(fen, x, y, tx, ty);
                 console.log(x, y, tx, ty)
                 setOpSelect(x, y);
                 setTimeout(() => {
                     ChessMoving(opChessRef.current, endX, endY, () => {
-                        if (board[ty][tx] !== 0) {
+                        const checking = nextFen.isChecking(!red);
+                        const checkmate = nextFen.isCheckmate(!red);
+                        if (checkmate) {
+                            loseSound.play()
+                        }
+                        else if (checking) {
+                            checkedSound.play()
+                        }
+                        else if (board[ty][tx] !== 0) {
                             eatSound.play();
                         } else {
                             clickSound.play();
                         }
                         push(x, y, tx, ty);
+                        if(checkmate){
+                            alert('你输了')
+                        }
                     })
                 }, 500);
             })
         }
         const boardStatus: BoardStatus = { canBack: canback, isEnd: false, curFen: fenStr };
         ipcRenderer.invoke(BoardStatusKey, boardStatus)
+
+    }, [turn, fenStr])
+
+    React.useEffect(() => {
         ipcRenderer.removeAllListeners('op:back');
         ipcRenderer.on('op:back', () => {
             console.log('op:back')
@@ -131,7 +153,8 @@ const Board = () => {
             console.log('op:rotation')
             setRotation(!rotation);
         })
-    }, [turn, fenStr])
+    }, [back, restart, setRotation])
+
 
     const clickBoard = (evt: Konva.KonvaEventObject<MouseEvent>) => {
         // console.log(evt)
@@ -146,8 +169,24 @@ const Board = () => {
         if (selected && availableMovement.filter(([ax, ay]) => ax == x && ay == y).length === 1) {
             const endX = x * spaceX + startX - chessSize / 2;
             const endY = positionY * spaceY + startY - chessSize / 2;
+            const nextFen = FEN.UpdateFen(fen, select.x, select.y, x, y);
+            if (nextFen.isChecking(!turn) || nextFen.isKingFacing()) {
+                //被对方将军或者白脸，则点击无效
+                goErrorSound.play();
+                return;
+            }
+
+            const checking = nextFen.isChecking(turn);
+            const checkmate = nextFen.isCheckmate(turn);
+
             ChessMoving(chessRef.current, endX, endY, () => {
-                if (board[y][x] !== 0) {
+                if (checkmate) {
+                    //将死对方不播放声音
+                }
+                else if (checking) {
+                    checkingSound.play()
+                }
+                else if (board[y][x] !== 0) {
                     eatSound.play();
                 } else {
                     clickSound.play();
@@ -240,7 +279,6 @@ const Board = () => {
                     {availableMovement.map(([x, y], i) => {
                         return <Image key={i} image={DotImage} x={x * spaceX + startX - DotImageOffsetX} y={(rotation ? y : 9 - y) * spaceY + startY - DotImageOffsetY} />
                     })}
-
                 </Layer> : null}
                 <Layer>
                     {/* <Rect width={boardWith + boardOffSetX} height={boardHeight + boardOffSetY} onMouseMove={mouseMoveBoard} onClick={clickBoard} _useStrictMode /> */}

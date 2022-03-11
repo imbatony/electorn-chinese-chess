@@ -19,6 +19,9 @@ export class Pawn extends BasePiece {
   GetCode(): string {
     return this.isRed ? "P" : "p";
   }
+  CanCheck():boolean{
+    return true;
+  }
   GetAvailableMovement(
     x: number,
     y: number,

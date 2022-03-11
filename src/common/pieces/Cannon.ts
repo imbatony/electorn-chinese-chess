@@ -19,6 +19,9 @@ export class Cannon extends BasePiece {
   GetCode(): string {
     return this.isRed ? "C" : "c";
   }
+  CanCheck():boolean{
+    return true;
+  }
   GetAvailableMovement(
     x: number,
     y: number,
@@ -88,6 +91,7 @@ export class Cannon extends BasePiece {
       }
     }
     //右
+    block = false;
     for (let i = x + 1; i <= 8; i++) {
       if (!block) {
         if (board[y][i] === 0) {

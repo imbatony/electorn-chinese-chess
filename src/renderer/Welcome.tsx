@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { useState } from 'react';
 const { ipcRenderer } = window.require('electron');
+import { playBgm } from './Sound';
 import { Link } from 'react-router-dom';
 const Welcome = () => {
     const [step, setStep] = useState(1);
@@ -19,9 +20,9 @@ const Welcome = () => {
             </div>
         } else if (step === 2) {
             return <div className='menu_box'>
-                <a onClick={() => {setDifficulty(1);setStep(3)}}>初级水平</a>
-                <a onClick={() => {setDifficulty(2);setStep(3)}}>中级水平</a>
-                <a onClick={() => {setDifficulty(3);setStep(3)}}>高级水平</a>
+                <a onClick={() => { setDifficulty(1); setStep(3) }}>初级水平</a>
+                <a onClick={() => { setDifficulty(2); setStep(3) }}>中级水平</a>
+                <a onClick={() => { setDifficulty(3); setStep(3) }}>高级水平</a>
                 <a onClick={() => setStep(1)}>上一步</a>
             </div>
         } else if (step === 3) {
@@ -32,6 +33,10 @@ const Welcome = () => {
             </div>
         }
     }
+    React.useEffect(() => {
+        playBgm('welcome')
+        
+    }, [])
     return <div className='welcome'>
         <div className='title' style={{ padding: 60 }}>
             <span>中国象棋</span>

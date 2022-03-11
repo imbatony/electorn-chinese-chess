@@ -19,6 +19,9 @@ export class Knight extends BasePiece {
   GetCode(): string {
     return this.isRed ? "N" : "n";
   }
+  CanCheck():boolean{
+    return true;
+  }
   GetAvailableMovement(
     x: number,
     y: number,

@@ -16,6 +16,9 @@ export class Rook extends BasePiece {
   GetName(): string {
     return "车";
   }
+  CanCheck():boolean{
+    return true;
+  }
   GetCode(): string {
     return this.isRed ? "R" : "r";
   }
