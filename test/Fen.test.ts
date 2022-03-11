@@ -88,3 +88,44 @@ test("Test UpdateFen", () => {
     "rnbakabnr/9/7c1/p1p1p1p1p/9/9/P1P1c1P1P/1C5C1/9/RNBAKABNR r"
   );
 });
+
+test("Test Checking & Checkmate", () => {
+  //重炮杀
+  const fen1 = new FEN("rnbakabnr/9/1c5c1/p1p3p1p/4C4/4C4/P1P1P1P1P/9/9/RNBAKABNR b");
+  expect(fen1.isChecking(true)).toBe(true)
+  expect(fen1.isChecking(false)).toBe(false)
+  expect(fen1.isCheckmate(true)).toBe(true)
+
+  //黑方困毙
+  const fen2 = new FEN("3k5/4P4/9/9/9/9/9/9/9/4K4 b");
+  expect(fen2.isChecking(true)).toBe(false)
+  expect(fen2.isChecking(false)).toBe(false)
+  expect(fen2.isCheckmate(true)).toBe(true)
+
+  //白脸将
+  const fen3 = new FEN("3k5/9/9/9/9/9/9/3R5/4K4/9 b");
+  expect(fen3.isChecking(true)).toBe(true)
+  expect(fen3.isChecking(false)).toBe(false)
+  expect(fen3.isCheckmate(true)).toBe(true)
+
+  //白脸将
+  let fen4 = new FEN("3k5/9/9/9/9/9/9/3R5/4K4/9 b");
+  expect(fen4.isChecking(true)).toBe(true)
+  expect(fen4.isChecking(false)).toBe(false)
+  expect(fen4.isCheckmate(true)).toBe(true)
+
+  //马后炮
+  fen4 = new FEN("5k3/4a4/4bN3/9/9/5C3/9/9/4K4/9 b");
+  expect(fen4.isChecking(true)).toBe(true)
+  expect(fen4.isChecking(false)).toBe(false)
+  expect(fen4.isCheckmate(true)).toBe(true)
+
+  fen4 = new FEN("3aka3/9/9/9/9/9/9/9/9/3AKA3 b");
+  expect(fen4.isKingFacing()).toBe(true)
+
+  //困毙
+  fen4 = new FEN("3aka3/4n4/9/9/9/9/9/9/9/3AKA3 b");
+  expect(fen4.isChecking(true)).toBe(false)
+  expect(fen4.isCheckmate(true)).toBe(true)
+
+})

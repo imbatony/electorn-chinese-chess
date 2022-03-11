@@ -153,7 +153,7 @@ export class UCCIEngine {
 
     switch (true) {
       case command.indexOf(UCCI) !== -1:
-        this.IN_GO_WAITING = false;
+        this.IN_GO_WAITING = true;
         break;
       case command.indexOf(IS_READY) !== -1:
         break;

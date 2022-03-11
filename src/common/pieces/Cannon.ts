@@ -91,6 +91,7 @@ export class Cannon extends BasePiece {
       }
     }
     //右
+    block = false;
     for (let i = x + 1; i <= 8; i++) {
       if (!block) {
         if (board[y][i] === 0) {

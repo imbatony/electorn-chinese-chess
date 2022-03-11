@@ -108,9 +108,9 @@ export class FEN {
       })
       .join("/");
     newFen += " " + (fen.isRedTurn() ? "b" : "r");
-    console.log(
-      `UpdateFen from:${fen.fenstr} to:${newFen} movement:x->${x},y->${y},tx->${tx},ty->${ty}`
-    );
+    // console.log(
+    //   `UpdateFen from:${fen.fenstr} to:${newFen} movement:x->${x},y->${y},tx->${tx},ty->${ty}`
+    // );
     let newMove = PointsToICCS(x, y, tx, ty);
     if (fen.moves !== "") {
       newMove = fen.moves + " " + newMove;
@@ -202,8 +202,8 @@ export class FEN {
    */
   isChecking(isRed = this.isRedTurn()): boolean {
     let [kingPostionX, kingPostionY] = [0, 0];
-    for (let i = 0; i < 8; i++) {
-      for (let j = 0; j < 9; j++) {
+    for (let i = 0; i <= 8; i++) {
+      for (let j = 0; j <= 9; j++) {
         if (this.arr[j][i] != 0) {
           const piece = PieceArray[this.arr[j][i] - 1];
           if (piece.IsRed() !== isRed && piece.GetCode().toLowerCase() === 'k') {
@@ -213,8 +213,8 @@ export class FEN {
       }
     }
 
-    for (let i = 0; i < 8; i++) {
-      for (let j = 0; j < 9; j++) {
+    for (let i = 0; i <= 8; i++) {
+      for (let j = 0; j <= 9; j++) {
         if (this.arr[j][i] != 0) {
           const piece = PieceArray[this.arr[j][i] - 1];
           if (piece.IsRed() === isRed && piece.CanCheck()) {
@@ -230,50 +230,63 @@ export class FEN {
     }
     return false;
   }
+
+  isKingFacing(): boolean {
+    for (let i = 0; i <= 8; i++) {
+      for (let j = 0; j <= 9; j++) {
+        if (this.arr[j][i] !== 0) {
+          const piece = PieceArray[this.arr[j][i] - 1];
+          if (piece.GetCode() === 'k') {
+            for (let k = j + 1; k <= 9; k++) {
+              if (this.arr[k][i] !== 0) {
+                const p = PieceArray[this.arr[k][i] - 1];
+                if (p.GetCode() === 'K') {
+                  return true;
+                } else {
+                  return false;
+                }
+              }
+            }
+          } else {
+            continue;
+          }
+        }
+      }
+    }
+    return false;
+  }
+
   /**
-   * 是否某方无棋可走
+   * 是否某方将死对方
+   * 实现逻辑：穷举对方所有可行动作，将会导致被将军或者困毙
    * @param isRed 
    */
-  isNoMoving(isRed = this.isRedTurn()): boolean {
+  isCheckmate(isRed = this.isRedTurn()): boolean {
+    //遍历对方可移动的盘面，是否走了以后没有被将，则说明没将死
     for (let i = 0; i < 8; i++) {
       for (let j = 0; j < 9; j++) {
         if (this.arr[j][i] != 0) {
           const piece = PieceArray[this.arr[j][i] - 1];
-          if (piece.IsRed() === isRed) {
-            const movement = piece.GetAvailableMovement(i, j, this.arr, PieceArray).length
-            if (movement > 0) {
-              return false;
+          if (piece.IsRed() !== isRed) {
+            const movements = piece.GetAvailableMovement(i, j, this.arr, PieceArray)
+            if (movements.length > 0) {
+              for (const [tx, ty] of movements) {
+                let nextFen = FEN.UpdateFen(this, i, j, tx, ty);
+                const noChecking = !nextFen.isChecking(isRed);
+                const noFacing = !nextFen.isKingFacing();
+                if (noChecking && noFacing) {
+                  console.log("existing move[", i, ",", j, "]->[", tx, ",", ty, "],noChecking:", noChecking)
+                  return false;
+                }
+              }
             }
           }
         }
       }
     }
+    //
     return true;
   }
-
-
-  /**
-   * 
-   * @param isRed 是否某方将死对方
-   */
-  // isCheckmate(isRed = this.isRedTurn()): boolean {
-  //   for (let i = 0; i < 8; i++) {
-  //     for (let j = 0; j < 9; j++) {
-  //       if (this.arr[j][i] != 0) {
-  //         const piece = PieceArray[this.arr[j][i] - 1];
-  //         if (piece.IsRed() !== isRed) {
-  //           const movements = piece.GetAvailableMovement(i, j, this.arr, PieceArray)
-  //             if (movements.length > 0) {
-  //               for(let k =)
-  //             }
-          
-  //         }
-  //       }
-  //     }
-  //   }
-  // }
-
-
 
   printBoard(): void {
     for (const e of this.arr) {

@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { useState } from 'react';
 const { ipcRenderer } = window.require('electron');
+import { playBgm } from './Sound';
 import { Link } from 'react-router-dom';
 const Welcome = () => {
     const [step, setStep] = useState(1);
@@ -32,6 +33,10 @@ const Welcome = () => {
             </div>
         }
     }
+    React.useEffect(() => {
+        playBgm('welcome')
+        
+    }, [])
     return <div className='welcome'>
         <div className='title' style={{ padding: 60 }}>
             <span>中国象棋</span>
