@@ -10,8 +10,9 @@ import { ICCSToPoints } from '../common/ICCS';
 import { ChessSelected, ChessMoving } from './Animation';
 import Konva from 'konva';
 import { clickSound, selectSound, eatSound, checkingSound, checkedSound, goErrorSound, winSound, loseSound, playBgm } from './Sound';
-import { DotImage, BGImage, ChessImageArray, RedBoxImage, boardHeight, boardWith, boardOffSetX, boardOffSetY, spaceX, spaceY, startX, startY, redBoxSize, chessSize, DotImageOffsetX, DotImageOffsetY } from './Images';
-
+import { DotImage, BGImage, ChessImageArray, RedBoxImage, boardHeight, boardWith, boardOffSetX, boardOffSetY, spaceX, spaceY, startX, startY, redBoxSize, chessSize, DotImageOffsetX, DotImageOffsetY, WaypointImage,waySpaceX,waySpaceY } from './Images';
+import { BgmContext } from './context'
+import { ImageConfig } from "konva/lib/shapes/Image";
 interface Position {
     x: number,
     y: number
@@ -24,14 +25,14 @@ function usePosition(x: number, y: number): [Position, (x: number, y: number) =>
     return [position, setPoint];
 }
 
-function useFEN(fenParam: string): [FEN, string, boolean, boolean, readonly (readonly number[])[], (x: number, y: number, tx: number, ty: number) => void, () => void, boolean, () => void] {
+function useFEN(fenParam: string): [FEN, string, boolean, [number, number, number, number], boolean, readonly (readonly number[])[], (x: number, y: number, tx: number, ty: number) => void, () => void, boolean, () => void] {
     const fenInit = new FEN(fenParam);
     const [fenArray, setFenArray] = useState([fenInit]);
     const [index, setIndex] = useState(0);
 
-    const [fen, fenStr, redTurn, chessArray, isCheckmate] = useMemo(() => {
+    const [fen, fenStr, redTurn, chessArray, isCheckmate, lastMove] = useMemo(() => {
         const fen = fenArray[index];
-        return [fen, fen.getFenWithMove(), fen.isRedTurn(), fen.getChessArray(), fen.isCheckmate()]
+        return [fen, fen.getFenWithMove(), fen.isRedTurn(), fen.getChessArray(), fen.isCheckmate(), fen.getLastMove()]
     }, [index])
 
     const canback = useMemo(() => {
@@ -59,18 +60,19 @@ function useFEN(fenParam: string): [FEN, string, boolean, boolean, readonly (rea
             setIndex(0);
         }
     }, [index, fen])
-    return [fen, fenStr, redTurn, isCheckmate, chessArray, push, back, canback, restart]
+    return [fen, fenStr, redTurn, lastMove, isCheckmate, chessArray, push, back, canback, restart]
 }
 
 const Board = () => {
     const params = useParams();
+    const bgmContext = React.useContext(BgmContext)
     const difficulty = params.difficulty;
     const fenParams = params.fen;
     const red: boolean = (params.red ?? 'true') === 'true';
     const rotationParm: boolean = (params.red ?? 'true') === 'true';
     console.log(rotationParm)
     const [rotation, setRotation] = useState(rotationParm);
-    const [fen, fenStr, turn, isCheckmate, board, push, back, canback, restart] = useFEN(fenParams)
+    const [fen, fenStr, turn, lastMove, isCheckmate, board, push, back, canback, restart] = useFEN(fenParams)
 
     const [mouseMove, setMouseMove] = usePosition(-1, -1);
     const [select, setSelect] = usePosition(-1, -1);
@@ -81,7 +83,7 @@ const Board = () => {
         return select.x >= 0 && select.y >= 0 && board[select.y][select.x] > 0 && PieceArray[board[select.y][select.x] - 1].IsRed() === turn
     }, [turn, fenStr, select])
     React.useEffect(() => {
-        playBgm('board')
+        bgmContext.setType('board')
     }, [])
     const availableMovement = useMemo<Array<[number, number]>>(() => {
         if (!selected) {
@@ -125,7 +127,7 @@ const Board = () => {
                             clickSound.play();
                         }
                         push(x, y, tx, ty);
-                        if(checkmate){
+                        if (checkmate) {
                             alert('你输了')
                         }
                     })
@@ -212,7 +214,9 @@ const Board = () => {
     const showSelect = useMemo<boolean>(() => {
         return select.x >= 0 && select.y >= 0 && board[select.y][select.x] > 0 && (PieceArray[board[select.y][select.x] - 1].IsRed() === red)
     }, [select.x, select.x, board])
-
+    const showWayPoint = useMemo<boolean>(() => {
+        return lastMove[0] != -1 && lastMove[1] != -1 && lastMove[2] != -1 && lastMove[3] != -1
+    }, [select.x, select.x, board])
     const showRedBox = useMemo<boolean>(() => {
         //disableRedBox
         return mouseMove.x >= 0 && mouseMove.y >= 0 && false
@@ -251,15 +255,27 @@ const Board = () => {
                                 if (e > 0) {
                                     const imageX = x * spaceX + startX - chessSize / 2;
                                     const imageY = (rotation ? y : 9 - y) * spaceY + startY - chessSize / 2;
+                                    let shawdow = false;
+                                    if (x == lastMove[2] && y === lastMove[3]) {
+                                        shawdow = true;
+                                    }
+                                    const image: ImageConfig = { key: `${x}_${y}`, image: ChessImageArray[e - 1], x: imageX, y: imageY };
+                                    if (shawdow) {
+                                        image.shadowBlur = 10;
+                                        image.shadowColor = 'white',
+                                            image.shadowOpacity = 0.8
+                                    }
                                     if (x == select.x && y == select.y) {
+                                        image.ref = chessRef;
+                                        return <Image {...image}></Image>
 
-                                        return <Image key={`${x}_${y}`} ref={chessRef} image={ChessImageArray[e - 1]} x={imageX} y={imageY} ></Image>
                                     }
                                     else if (x == opSelect.x && y == opSelect.y) {
-                                        return <Image key={`${x}_${y}`} ref={opChessRef} image={ChessImageArray[e - 1]} x={imageX} y={imageY} ></Image>
+                                        image.ref = opChessRef;
+                                        return <Image {...image}></Image>
                                     }
                                     else {
-                                        return <Image key={`${x}_${y}`} image={ChessImageArray[e - 1]} x={imageX} y={imageY} ></Image>
+                                        return <Image {...image}></Image>
                                     }
                                 }
                                 else {
@@ -269,17 +285,12 @@ const Board = () => {
                         })}
                     </Layer>
                 }
-                {showSelect ? <Layer>
-                    <Image image={RedBoxImage} x={select.x * spaceX + startX - chessSize / 2} y={(rotation ? select.y : 9 - select.y) * spaceY + startY - chessSize / 2} />
-                </Layer> : null}
-                {showRedBox ? <Layer>
-                    <Image image={RedBoxImage} x={redBoxX} y={redBoxY} />
-                </Layer> : null}
-                {selected ? <Layer>
-                    {availableMovement.map(([x, y], i) => {
-                        return <Image key={i} image={DotImage} x={x * spaceX + startX - DotImageOffsetX} y={(rotation ? y : 9 - y) * spaceY + startY - DotImageOffsetY} />
-                    })}
-                </Layer> : null}
+                <Layer>
+                    {showSelect ? <Image image={RedBoxImage} x={select.x * spaceX + startX - chessSize / 2} y={(rotation ? select.y : 9 - select.y) * spaceY + startY - chessSize / 2} /> : null}
+                    {showRedBox ? <Image image={RedBoxImage} x={redBoxX} y={redBoxY} /> : null}
+                    {selected ? availableMovement.map(([x, y], i) => <Image key={i} image={DotImage} x={x * spaceX + startX - DotImageOffsetX} y={(rotation ? y : 9 - y) * spaceY + startY - DotImageOffsetY} />) : null}
+                    {showWayPoint ? <Image image={WaypointImage} x={lastMove[0] * spaceX + startX - waySpaceX / 2} y={(rotation ? lastMove[1] : 9 - lastMove[1]) * spaceY + startY - waySpaceY / 2} /> : null}
+                </Layer>
                 <Layer>
                     {/* <Rect width={boardWith + boardOffSetX} height={boardHeight + boardOffSetY} onMouseMove={mouseMoveBoard} onClick={clickBoard} _useStrictMode /> */}
                     <Rect width={boardWith + boardOffSetX} height={boardHeight + boardOffSetY} onClick={clickBoard} _useStrictMode />

@@ -5,9 +5,10 @@ import {
   Menu,
   MenuItemConstructorOptions,
   MenuItem,
-  shell,
+  clipboard,
   ipcMain,
   globalShortcut,
+  Notification
 } from "electron";
 import fetch from "node-fetch";
 import path from "path";
@@ -41,7 +42,7 @@ if (require("electron-squirrel-startup")) {
     app.quit();
   });
 }
-let boardstatus: BoardStatus = null;
+let boardStatus: BoardStatus = null;
 let mainWindow: BrowserWindow;
 const createWindow = (): void => {
   // Create the browser window.
@@ -134,6 +135,23 @@ const template: Array<MenuItemConstructorOptions | MenuItem> = [
         },
         enabled: false,
       },
+      {
+        id: "op:bgm",
+        label: "打开/关闭音乐",
+        click: () => {
+          mainWindow.webContents.send("op:togglebgm");
+        },
+        enabled: true,
+      },
+      {
+        id: "op:copyfen",
+        label: "复制盘面FEN码",
+        click: () => {
+          clipboard.writeText(boardStatus.curFen);
+          new Notification({title:"复制成功",body:"复制盘面FEN码成功"}).show()
+        },
+        enabled: false,
+      }
     ],
   },
   {
@@ -171,7 +189,7 @@ ipcMain.handle("queryMove", async (event, fenStr, difficulty) => {
   // );
   // return await result.text();
   console.log("recieve:", fenStr, " ,query engine to get best move");
-  const info = await eleeyeeEngine.infoAndMove(fenStr,1000*difficulty);
+  const info = await eleeyeeEngine.infoAndMove(fenStr, 5000 * difficulty);
   if (info) {
     console.log(info.bestmove);
     return info.bestmove;
@@ -182,9 +200,14 @@ ipcMain.handle("queryMove", async (event, fenStr, difficulty) => {
 });
 
 ipcMain.handle(BoardStatusKey, (_evt, status: BoardStatus) => {
-  boardstatus = status;
+  boardStatus = status;
   console.log(status);
   menu.getMenuItemById("op:back").enabled = status.canBack;
   menu.getMenuItemById("op:restart").enabled = true;
   menu.getMenuItemById("op:rotation").enabled = true;
+  menu.getMenuItemById("op:copyfen").enabled = true;
+});
+
+ipcMain.on("bgm", (evt, bgm: boolean, type: string) => {
+  console.log(bgm)
 });

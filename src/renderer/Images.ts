@@ -100,3 +100,5 @@ export const redBoxSize = 54;
 export const chessSize = 54;
 export const DotImageOffsetX = 13;
 export const DotImageOffsetY = 13;
+export const waySpaceX = 41;
+export const waySpaceY = 41;
