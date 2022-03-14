@@ -1,9 +1,11 @@
 import * as React from 'react';
 import { useState } from 'react';
 const { ipcRenderer } = window.require('electron');
-import { playBgm } from './Sound';
 import { Link } from 'react-router-dom';
+import { BgmContext } from './context';
+
 const Welcome = () => {
+    const bgmContext = React.useContext(BgmContext)
     const [step, setStep] = useState(1);
     const [difficulty, setDifficulty] = useState(1);
     const clickCompat = () => {
@@ -34,8 +36,7 @@ const Welcome = () => {
         }
     }
     React.useEffect(() => {
-        playBgm('welcome')
-        
+        bgmContext.setType('welcome')
     }, [])
     return <div className='welcome'>
         <div className='title' style={{ padding: 60 }}>

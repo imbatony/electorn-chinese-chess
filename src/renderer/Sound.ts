@@ -20,15 +20,18 @@ export const loseSound = new Audio(gamelose);
 export const bgSound = new Audio(bg);
 export const bgmSound = new Audio(bgm);
 
-export const playBgm = function (type: 'welcome' | 'board') {
-    bgSound.pause();
-    bgmSound.pause()
-    if (type === 'welcome') {
+export const playBgm = function (bgm: boolean, type: "welcome" | "board") {
+  bgSound.pause();
+  bgmSound.pause();
+  if(bgm){
+    if (type === "welcome") {
         bgSound.loop = true;
         bgSound.play();
-    }
-    if (type === 'board') {
+      }
+      if (type === "board") {
         bgmSound.loop = true;
         bgmSound.play();
-    }
-}
+      }
+  }
+
+};

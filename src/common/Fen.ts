@@ -26,6 +26,8 @@ export class FEN {
    */
   private turn: boolean;
 
+  private lastMove: [number, number, number, number];
+
   private moves: string;
   /**
    * 盘面数组
@@ -115,14 +117,15 @@ export class FEN {
     if (fen.moves !== "") {
       newMove = fen.moves + " " + newMove;
     }
-    return new FEN(newFen, arrClone, newMove, fen.fenInit);
+    return new FEN(newFen, arrClone, newMove, fen.fenInit, [x, y, tx, ty]);
   }
 
   constructor(
     str?: string,
     arr?: Array<Array<number>>,
     moves?: string,
-    initFen?: string
+    initFen?: string,
+    lastMove?: [number, number, number, number]
   ) {
     if (str) {
       if (FEN.verifyFEN(str)) {
@@ -136,6 +139,12 @@ export class FEN {
       this.fenstr = defaultFenInit;
     }
     this.valid = true;
+    if (lastMove) {
+      this.lastMove = lastMove;
+    } else {
+      this.lastMove = [-1, -1, -1, -1];
+    }
+
     if (initFen) {
       this.fenInit = initFen;
     } else {
@@ -175,11 +184,13 @@ export class FEN {
   getFen(): string {
     return this.fenstr;
   }
+  getLastMove(): [number, number, number, number] {
+    return this.lastMove;
+  }
 
   getFenWithMove(): string {
     if (this.moves) {
-      return `${this.fenInit} - - 0 1 moves ${this.moves
-        }`;
+      return `${this.fenInit} - - 0 1 moves ${this.moves}`;
     } else {
       return `${this.fenInit} - - 0 1`;
     }
@@ -206,7 +217,10 @@ export class FEN {
       for (let j = 0; j <= 9; j++) {
         if (this.arr[j][i] != 0) {
           const piece = PieceArray[this.arr[j][i] - 1];
-          if (piece.IsRed() !== isRed && piece.GetCode().toLowerCase() === 'k') {
+          if (
+            piece.IsRed() !== isRed &&
+            piece.GetCode().toLowerCase() === "k"
+          ) {
             [kingPostionX, kingPostionY] = [i, j];
           }
         }
@@ -220,7 +234,9 @@ export class FEN {
           if (piece.IsRed() === isRed && piece.CanCheck()) {
             const checkMovement = piece
               .GetAvailableMovement(i, j, this.arr, PieceArray)
-              .filter(([x, y]) => x === kingPostionX && y === kingPostionY).length;
+              .filter(
+                ([x, y]) => x === kingPostionX && y === kingPostionY
+              ).length;
             if (checkMovement > 0) {
               return true;
             }
@@ -236,11 +252,11 @@ export class FEN {
       for (let j = 0; j <= 9; j++) {
         if (this.arr[j][i] !== 0) {
           const piece = PieceArray[this.arr[j][i] - 1];
-          if (piece.GetCode() === 'k') {
+          if (piece.GetCode() === "k") {
             for (let k = j + 1; k <= 9; k++) {
               if (this.arr[k][i] !== 0) {
                 const p = PieceArray[this.arr[k][i] - 1];
-                if (p.GetCode() === 'K') {
+                if (p.GetCode() === "K") {
                   return true;
                 } else {
                   return false;
@@ -259,7 +275,7 @@ export class FEN {
   /**
    * 是否某方将死对方
    * 实现逻辑：穷举对方所有可行动作，将会导致被将军或者困毙
-   * @param isRed 
+   * @param isRed
    */
   isCheckmate(isRed = this.isRedTurn()): boolean {
     //遍历对方可移动的盘面，是否走了以后没有被将，则说明没将死
@@ -268,14 +284,30 @@ export class FEN {
         if (this.arr[j][i] != 0) {
           const piece = PieceArray[this.arr[j][i] - 1];
           if (piece.IsRed() !== isRed) {
-            const movements = piece.GetAvailableMovement(i, j, this.arr, PieceArray)
+            const movements = piece.GetAvailableMovement(
+              i,
+              j,
+              this.arr,
+              PieceArray
+            );
             if (movements.length > 0) {
               for (const [tx, ty] of movements) {
                 const nextFen = FEN.UpdateFen(this, i, j, tx, ty);
                 const noChecking = !nextFen.isChecking(isRed);
                 const noFacing = !nextFen.isKingFacing();
                 if (noChecking && noFacing) {
-                  console.log("existing move[", i, ",", j, "]->[", tx, ",", ty, "],noChecking:", noChecking)
+                  console.log(
+                    "existing move[",
+                    i,
+                    ",",
+                    j,
+                    "]->[",
+                    tx,
+                    ",",
+                    ty,
+                    "],noChecking:",
+                    noChecking
+                  );
                   return false;
                 }
               }
