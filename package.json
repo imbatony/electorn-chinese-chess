@@ -59,6 +59,7 @@
     "@electron/remote": "^2.0.4",
     "about-window": "^1.15.2",
     "electron-squirrel-startup": "^1.0.0",
+    "events": "^3.3.0",
     "konva": "^8.3.2",
     "lodash": "^4.17.21",
     "node-fetch": "^3.2.1",
