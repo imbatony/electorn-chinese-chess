@@ -23,6 +23,14 @@ export interface AboutWindowInfo {
 }
 
 export const BoardStatusKey = "render:boardstatus"
+export const QueryMoveKey = "render:boardstatus"
+export const APPEXITKey = "close-me"
+export const BgmKey = "render:bgm"
+export const OP_BACK = "op:back"
+export const OP_RESTART = "op:restart"
+export const OP_ROTATION = "op:rotation"
+export const OP_TOGGLE_BGM = "op:togglebgm"
+export const OP_COYPY_FEN = "op:copyfen"
 export interface BoardStatus {
   curFen: string;
   canBack: boolean;

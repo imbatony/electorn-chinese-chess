@@ -28,8 +28,25 @@ export const ChessMoving = (
     y: ty,
     scaleX: 1.2,
     scaleY: 1.2,
+    duration: 0.2,
+    easing: Konva.Easings.EaseInOut,
+    onFinish: callback,
+  });
+};
+
+export const ChessMoving2 = (
+  shape: Konva.Image,
+  tx: number,
+  ty: number,
+  callback?: () => void
+): void => {
+  shape.to({
+    x: tx,
+    y: ty,
+    scaleX: 1.2,
+    scaleY: 1.2,
     duration: 0.5,
-    easing: Konva.Easings.ElasticEaseOut,
+    easing: Konva.Easings.EaseInOut,
     onFinish: callback,
   });
 };
