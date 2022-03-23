@@ -1,6 +1,6 @@
 module.exports = {
     "packagerConfig": {
-        "name": "乐乐象棋",
+        "name": "飞将象棋",
         "icon": "./assets/img/ICON.ico",
         "extraResource":  [
             './assets/engine',

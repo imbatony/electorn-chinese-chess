@@ -43,17 +43,17 @@ export function InitIPC() {
   ipcMain.on(BoardStatusKey, (_evt, status: BoardStatus) => {
     FeiJiang.boardStaus = status;
     console.log(status);
-    Menu.setApplicationMenu(Menu.buildFromTemplate(GetTemplate()));
+    FeiJiang.mainWin.setMenu(Menu.buildFromTemplate(GetTemplate()));
   });
 
   ipcMain.on(BgmKey, (evt, bgm: boolean, type: string) => {
     console.log(bgm);
-    Menu.setApplicationMenu(Menu.buildFromTemplate(GetTemplate()));
+    FeiJiang.mainWin.setMenu(Menu.buildFromTemplate(GetTemplate()));
   });
 
   ipcMain.on(OP_UPDATE_SIDE, (evt, obj: { red: string; black: string }) => {
     FeiJiang.redSide = obj.red;
     FeiJiang.blackSide = obj.black;
-    Menu.setApplicationMenu(Menu.buildFromTemplate(GetTemplate()));
+    FeiJiang.mainWin.setMenu(Menu.buildFromTemplate(GetTemplate()));
   });
 }

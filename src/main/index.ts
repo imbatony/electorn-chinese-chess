@@ -41,6 +41,7 @@ const createWindow = (): void => {
     height: 720,
     width: 800,
     resizable: false,
+    autoHideMenuBar:false,
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false,
@@ -62,6 +63,8 @@ const createWindow = (): void => {
   if (env !== "production") {
     mainWindow.webContents.openDevTools({ mode: "detach" });
   }
+  const menu = Menu.buildFromTemplate(GetTemplate());
+  mainWindow.setMenu(menu);
 };
 
 // This method will be called when Electron has finished
@@ -88,6 +91,7 @@ app.on("activate", () => {
   }
 });
 
-const menu = Menu.buildFromTemplate(GetTemplate());
-Menu.setApplicationMenu(menu);
+
+// Menu.setApplicationMenu(menu);
+
 InitIPC();
