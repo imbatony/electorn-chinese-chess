@@ -43,6 +43,14 @@ ipcRenderer.on('about-window:info', (_: any, info: AboutWindowInfo, app_name: st
             shell.openExternal(info.bug_report_url);
         });
     }
+    if (info.homepage) {
+        const homepageEle = document.querySelector('.sourcecode-link') as HTMLDivElement;
+        homepageEle.innerText = info.visit_source_code_text || 'Visit source code';
+        homepageEle.addEventListener('click', e => {
+            e.preventDefault();
+            shell.openExternal(info.homepage);
+        });
+    }
 
     if (info.css_path) {
         const css_paths = !Array.isArray(info.css_path) ? [info.css_path] : info.css_path;

@@ -10,27 +10,37 @@ import {
   BgmKey,
   OP_TOGGLE_BGM,
   APPEXITKey,
+  OP_UPDATE_SIDE,
 } from "../common/IPCInfos";
 import { createContext } from "react";
 import { playBgm } from "./Sound";
+import { PlaySide } from "./types";
 const { ipcRenderer } = window.require("electron");
 let onback: () => void;
 let onRestart: () => void;
 let onRotation: () => void;
 let difficulty = 1;
 let bgmOn = true;
+let mode = "normal";
 let bgmType: "welcome" | "board" = "welcome";
 
 const setBgmOn = (bgm: boolean) => {
   bgmOn = bgm;
+};
+const setMode = (m: string) => {
+  mode = m;
 };
 const setBgmType = (type: "welcome" | "board") => {
   bgmType = type;
   playBgm(bgmOn, bgmType);
   ipcRenderer.send(BgmKey, bgmOn, bgmType);
 };
-const queryMove = (fenStr: string) => {
-  return ipcRenderer.invoke(QueryMoveKey, fenStr, difficulty);
+const queryMove = (fenStr: string, turn: boolean) => {
+  let dif = difficulty;
+  if (mode !== "normal") {
+    dif = null;
+  }
+  return ipcRenderer.invoke(QueryMoveKey, { fenStr, difficulty: dif, turn });
 };
 ipcRenderer.removeAllListeners(OP_TOGGLE_BGM);
 ipcRenderer.on(OP_TOGGLE_BGM, () => {
@@ -38,6 +48,7 @@ ipcRenderer.on(OP_TOGGLE_BGM, () => {
   playBgm(bgmOn, bgmType);
   ipcRenderer.send(BgmKey, bgmOn, bgmType);
 });
+
 ipcRenderer.removeAllListeners(OP_BACK);
 ipcRenderer.on(OP_BACK, () => {
   console.log(OP_BACK);
@@ -60,6 +71,8 @@ export const defaultChessState = {
   type: bgmType,
   setType: setBgmType,
   setBgmOn: setBgmOn,
+  mode: mode,
+  setMode: setMode,
   updateBoardStatus(boardStatus: BoardStatus) {
     ipcRenderer.send(BoardStatusKey, boardStatus);
   },
@@ -67,8 +80,8 @@ export const defaultChessState = {
   setDifficulty(diff: number) {
     difficulty = diff;
   },
-  queryMove(fenStr: string) {
-    return queryMove(fenStr);
+  queryMove(fenStr: string, turn: boolean) {
+    return queryMove(fenStr, turn);
   },
   setOnBack(backFunc: () => void) {
     onback = backFunc;
@@ -79,8 +92,18 @@ export const defaultChessState = {
   setOnRotation(rotationFunc: () => void) {
     onRotation = rotationFunc;
   },
+  redSide: "none",
+  setRedSide: (key: string) => {},
+  blackSide: "none",
+  setBlackSide: (key: string) => {},
   exit() {
     ipcRenderer.send(APPEXITKey);
   },
+  syncSide: (obj: { red: string; black: string }) => {
+    ipcRenderer.send(OP_UPDATE_SIDE, obj);
+  },
+  setChangeSideCallBack: (
+    sideCallBackFunc: (prev: PlaySide, cur: PlaySide) => void
+  ) => {},
 };
 export const ChessContext = createContext(defaultChessState);

@@ -71,7 +71,11 @@ body {
   right: 0.5em;
   bottom: 0.5em;
 }
-
+.sourcecode-link {
+  position: absolute;
+  right: 6em;
+  bottom: 0.5em;
+}
 .clickable,
 .bug-report-link,
 .buttons button {

@@ -8,22 +8,22 @@ import { PiecesLayer } from './PiecesLayer';
 import { HintLayer } from './HintLayer';
 import { OperationLayer } from './OperationLayer';
 import { PieceArray } from '../../common/Pieces';
-import { Position } from '../types';
 import { FEN } from '../../common/Fen';
-import { ChessSelected, ChessMoving,ChessMoving2 } from '../Animation';
+import { ChessSelected, ChessMoving, ChessMoving2 } from '../Animation';
 import { clickSound, selectSound, eatSound, checkingSound, goErrorSound, checkedSound } from '../Sound';
 import { event } from '../Event';
 import { ICCSToPoints } from '../../common/ICCS';
 import { usePosition } from '../hooks';
+import { ChessContext } from '../context';
 interface ChessBoardProps {
     fen: FEN,
     rotation: boolean,
-    playerColor: boolean,
     push: (x: number, y: number, tx: number, ty: number) => void
 }
 
-export const ChessBoard = React.memo(({ rotation, fen, playerColor }: ChessBoardProps) => {
+export const ChessBoard = React.memo(({ rotation, fen }: ChessBoardProps) => {
     console.log("render ChessBoard")
+    const chessCtx = React.useContext(ChessContext)
     const board = fen.getChessArray();
     const turn = fen.isRedTurn();
     const lastMove = fen.getLastMove();
@@ -55,8 +55,7 @@ export const ChessBoard = React.memo(({ rotation, fen, playerColor }: ChessBoard
         setOpSelect(x, y);
         ChessMoving2(opChessRef.current, endX, endY, () => {
             console.log("chess moving done")
-            const checking = nextFen.isChecking(!playerColor);
-            const checkmate = nextFen.isCheckmate(!playerColor);
+            const checking = nextFen.isChecking(fen.isRedTurn());
             if (checking) {
                 checkedSound.play()
             }
@@ -69,15 +68,15 @@ export const ChessBoard = React.memo(({ rotation, fen, playerColor }: ChessBoard
             event.emit("newmove", x, y, tx, ty);
         })
     }
-    if (fen.isCheckmate(playerColor)) {
+    if (fen.isCheckmate(true)) {
         setTimeout(() => {
-            event.emit("win");
+            event.emit("terminate", true);
         }, 500);
 
     }
-    if (fen.isCheckmate(!playerColor)) {
+    if (fen.isCheckmate(false)) {
         setTimeout(() => {
-            event.emit("lose");
+            event.emit("terminate", false);
         }, 500);
     }
     React.useEffect(() => {
@@ -87,10 +86,20 @@ export const ChessBoard = React.memo(({ rotation, fen, playerColor }: ChessBoard
         }
     }, [fen])
 
+
+    const actionable = useMemo(() => {
+        if (fen.isRedTurn()) {
+            return chessCtx.redSide === 'human'
+        } else {
+            return chessCtx.blackSide === 'human'
+        }
+    }, [fen])
+
     const clickBoard = React.useCallback((evt: Konva.KonvaEventObject<MouseEvent>) => {
-        // console.log(evt)
-        // console.log(evt.evt.offsetX)
-        // console.log(evt.evt.offsetY)
+        if (!actionable) {
+            goErrorSound.play();
+            return;
+        }
         const x = Math.ceil((evt.evt.offsetX - startX - spaceX / 2) / spaceX)
         let y = Math.ceil((evt.evt.offsetY - startY - spaceY / 2) / spaceY)
         const positionY = y;
@@ -139,12 +148,13 @@ export const ChessBoard = React.memo(({ rotation, fen, playerColor }: ChessBoard
                 selectSound.play();
             }
         }
-    }, [selected, availableMovement, select])
+    }, [selected, availableMovement, select,actionable])
+
     return (
         <Stage width={boardWith + boardOffSetX} height={boardHeight + boardOffSetY}>
             <ChessBoradBG />
             <PiecesLayer chessRef={chessRef} opChessRef={opChessRef} board={board} rotation={rotation} select={select} opSelect={opSelect} lastMove={lastMove} />
-            <HintLayer board={board} rotation={rotation} select={select} selected={selected} lastMove={lastMove} red={playerColor} availableMovement={availableMovement}></HintLayer>
+            <HintLayer board={board} rotation={rotation} select={select} selected={selected} lastMove={lastMove}  availableMovement={availableMovement}></HintLayer>
             <OperationLayer clickBoard={clickBoard} />
         </Stage>)
 })

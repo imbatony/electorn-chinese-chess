@@ -87,3 +87,5 @@ typings/
 
 # Electron-Forge
 out/
+assets/engine/gg20180531/__db.*
+assets/engine/gg20180531/book.db
