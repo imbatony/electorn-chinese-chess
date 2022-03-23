@@ -18,9 +18,9 @@
     - [v0.0.14](#v0014)
   - [感谢](#感谢)
 ## 游戏截图
-![游戏截图](screeshot\screenshot.png "游戏截图")
+![游戏截图](screeshot/screenshot.png "游戏截图")
 ## 游戏动画
-![游戏动画](screeshot\video.gif "游戏动画")
+![游戏动画](screeshot/video.gif "游戏动画")
 
 ## 主要功能
 ### 基础功能
