@@ -1,9 +1,9 @@
-import { PieceIndexMap, PieceArray } from "./Pieces";
-import { PointsToICCS } from "./ICCS";
-import * as _ from "lodash";
+import * as _ from 'lodash';
 
-const defaultFenInit =
-  "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR w";
+import { PointsToICCS } from './ICCS';
+import { PieceArray, PieceIndexMap } from './Pieces';
+
+const defaultFenInit = 'rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR w';
 /**
  * https://www.xqbase.com/protocol/cchess_fen.htm
  */
@@ -40,18 +40,18 @@ export class FEN {
    * @returns
    */
   public static verifyFEN(s: string): boolean {
-    s = s.replace(/[\r\n]/, "");
-    s = s.replace(/%20/g, " ");
-    s = s.replace(/\+/g, " ");
-    s = s.replace(/ b.*/, " b");
-    s = s.replace(/ w.*/, " w");
-    s = s.replace(/ r.*/, " w");
+    s = s.replace(/[\r\n]/, '');
+    s = s.replace(/%20/g, ' ');
+    s = s.replace(/\+/g, ' ');
+    s = s.replace(/ b.*/, ' b');
+    s = s.replace(/ w.*/, ' w');
+    s = s.replace(/ r.*/, ' w');
 
     let a = [];
     let sum = 0;
     let w = new String(s.substr(s.length - 2, 2));
     w = w.toLowerCase();
-    if (w != " w" && w != " b") {
+    if (w != ' w' && w != ' b') {
       return false;
     }
     s = s.substr(0, s.length - 2);
@@ -64,7 +64,7 @@ export class FEN {
       if (String(a[x]).search(/[^1-9kabnrcpKABNRCP]/) != -1) {
         return false;
       }
-      a[x] = String(a[x]).replace(/[kabnrcpKABNRCP]/g, "1");
+      a[x] = String(a[x]).replace(/[kabnrcpKABNRCP]/g, '1');
       while (String(a[x]).length != 0) {
         sum = sum + Number(String(a[x]).charAt(0));
         a[x] = String(a[x]).substr(1);
@@ -76,13 +76,7 @@ export class FEN {
     return true;
   }
 
-  public static UpdateFen(
-    fen: FEN,
-    x: number,
-    y: number,
-    tx: number,
-    ty: number
-  ): FEN {
+  public static UpdateFen(fen: FEN, x: number, y: number, tx: number, ty: number): FEN {
     const arr = fen.arr;
     const arrClone = _.cloneDeep(arr);
     arrClone[y][x] = 0;
@@ -90,32 +84,32 @@ export class FEN {
 
     let newFen = arrClone
       .map((l) => {
-        let line = "";
+        let line = '';
         let number = 0;
         for (let i = 0; i <= 8; i++) {
           if (l[i] === 0) {
             number++;
           } else {
             if (number !== 0) {
-              line += "" + number;
+              line += '' + number;
               number = 0;
             }
             line += PieceArray[l[i] - 1].GetCode();
           }
         }
         if (number !== 0) {
-          line += "" + number;
+          line += '' + number;
         }
         return line;
       })
-      .join("/");
-    newFen += " " + (fen.isRedTurn() ? "b" : "r");
+      .join('/');
+    newFen += ' ' + (fen.isRedTurn() ? 'b' : 'r');
     // console.log(
     //   `UpdateFen from:${fen.fenstr} to:${newFen} movement:x->${x},y->${y},tx->${tx},ty->${ty}`
     // );
     let newMove = PointsToICCS(x, y, tx, ty);
-    if (fen.moves !== "") {
-      newMove = fen.moves + " " + newMove;
+    if (fen.moves !== '') {
+      newMove = fen.moves + ' ' + newMove;
     }
     return new FEN(newFen, arrClone, newMove, fen.fenInit, [x, y, tx, ty]);
   }
@@ -131,7 +125,7 @@ export class FEN {
       if (FEN.verifyFEN(str)) {
         this.fenstr = str;
       } else {
-        console.error("fen is invalid", str);
+        console.error('fen is invalid', str);
         this.fenstr = str;
         this.valid = false;
       }
@@ -153,11 +147,11 @@ export class FEN {
     if (moves) {
       this.moves = moves;
     } else {
-      this.moves = "";
+      this.moves = '';
     }
-    const fenSplit = this.fenstr.split(" ");
-    const fenArray = fenSplit[0].split("/");
-    this.turn = fenSplit[1] !== "b";
+    const fenSplit = this.fenstr.split(' ');
+    const fenArray = fenSplit[0].split('/');
+    this.turn = fenSplit[1] !== 'b';
     if (arr) {
       this.arr = arr;
       return;
@@ -168,7 +162,7 @@ export class FEN {
       const lineArray: Array<number> = [];
       for (let j = 0; j < line.length; j++) {
         const code = line.charAt(j);
-        if (code >= "0" && code <= "9") {
+        if (code >= '0' && code <= '9') {
           let zeros = parseInt(code);
           while (zeros-- > 0) {
             lineArray.push(0);
@@ -217,10 +211,7 @@ export class FEN {
       for (let j = 0; j <= 9; j++) {
         if (this.arr[j][i] != 0) {
           const piece = PieceArray[this.arr[j][i] - 1];
-          if (
-            piece.IsRed() !== isRed &&
-            piece.GetCode().toLowerCase() === "k"
-          ) {
+          if (piece.IsRed() !== isRed && piece.GetCode().toLowerCase() === 'k') {
             [kingPostionX, kingPostionY] = [i, j];
           }
         }
@@ -234,9 +225,7 @@ export class FEN {
           if (piece.IsRed() === isRed && piece.CanCheck()) {
             const checkMovement = piece
               .GetAvailableMovement(i, j, this.arr, PieceArray)
-              .filter(
-                ([x, y]) => x === kingPostionX && y === kingPostionY
-              ).length;
+              .filter(([x, y]) => x === kingPostionX && y === kingPostionY).length;
             if (checkMovement > 0) {
               return true;
             }
@@ -252,11 +241,11 @@ export class FEN {
       for (let j = 0; j <= 9; j++) {
         if (this.arr[j][i] !== 0) {
           const piece = PieceArray[this.arr[j][i] - 1];
-          if (piece.GetCode() === "k") {
+          if (piece.GetCode() === 'k') {
             for (let k = j + 1; k <= 9; k++) {
               if (this.arr[k][i] !== 0) {
                 const p = PieceArray[this.arr[k][i] - 1];
-                if (p.GetCode() === "K") {
+                if (p.GetCode() === 'K') {
                   return true;
                 } else {
                   return false;
@@ -284,12 +273,7 @@ export class FEN {
         if (this.arr[j][i] != 0) {
           const piece = PieceArray[this.arr[j][i] - 1];
           if (piece.IsRed() !== isRed) {
-            const movements = piece.GetAvailableMovement(
-              i,
-              j,
-              this.arr,
-              PieceArray
-            );
+            const movements = piece.GetAvailableMovement(i, j, this.arr, PieceArray);
             if (movements.length > 0) {
               for (const [tx, ty] of movements) {
                 const nextFen = FEN.UpdateFen(this, i, j, tx, ty);
@@ -297,15 +281,15 @@ export class FEN {
                 const noFacing = !nextFen.isKingFacing();
                 if (noChecking && noFacing) {
                   console.log(
-                    "existing move[",
+                    'existing move[',
                     i,
-                    ",",
+                    ',',
                     j,
-                    "]->[",
+                    ']->[',
                     tx,
-                    ",",
+                    ',',
                     ty,
-                    "],noChecking:",
+                    '],noChecking:',
                     noChecking
                   );
                   return false;
@@ -322,12 +306,12 @@ export class FEN {
 
   printBoard(): void {
     for (const e of this.arr) {
-      let line = "";
+      let line = '';
       for (const f of e) {
         if (f > 0) {
           line += PieceArray[f - 1].GetName();
         } else {
-          line += " ";
+          line += ' ';
         }
       }
       console.log(line);

@@ -1,4 +1,4 @@
-import { BasePiece, GetChineseMovementNameForSimpleChess } from "./BaseChess";
+import { BasePiece, GetChineseMovementNameForSimpleChess } from './BaseChess';
 
 /**
  * 象 or 相
@@ -9,23 +9,15 @@ export class Bishop extends BasePiece {
     y: number,
     newX: number,
     newY: number,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    board: ReadonlyArray<ReadonlyArray<number>>
+    _board: ReadonlyArray<ReadonlyArray<number>>
   ): string {
-    return GetChineseMovementNameForSimpleChess(
-      x,
-      y,
-      newX,
-      newY,
-      this.IsRed(),
-      this.GetName()
-    );
+    return GetChineseMovementNameForSimpleChess(x, y, newX, newY, this.IsRed(), this.GetName());
   }
   GetName(): string {
-    return this.isRed ? "相" : "象";
+    return this.isRed ? '相' : '象';
   }
   GetCode(): string {
-    return this.isRed ? "B" : "b";
+    return this.isRed ? 'B' : 'b';
   }
   GetAvailableMovement(
     x: number,
@@ -36,17 +28,17 @@ export class Bishop extends BasePiece {
     let movements: [number, number][] = [];
     let gapYU = 9;
     let gapYD = 5;
-    if(!this.isRed){
+    if (!this.isRed) {
       gapYU = 4;
       gapYD = 0;
     }
     //3点钟方向
     movements.push([x + 2, y - 2]);
-    //9点钟方向
+    //6点钟方向
     movements.push([x + 2, y + 2]);
-    //15点钟方向
+    //9点钟方向
     movements.push([x - 2, y + 2]);
-    //21点钟方向
+    //12点钟方向
     movements.push([x - 2, y - 2]);
     movements = movements.filter(([tx, ty]) => {
       if (
@@ -54,8 +46,7 @@ export class Bishop extends BasePiece {
         tx >= 0 &&
         ty >= gapYD &&
         ty <= gapYU &&
-        (board[ty][tx] === 0 ||
-          ChessArray[board[ty][tx] - 1].IsRed() != this.isRed)
+        (board[ty][tx] === 0 || ChessArray[board[ty][tx] - 1].IsRed() != this.isRed)
       ) {
         const blockX = (tx + x) / 2;
         const blockY = (ty + y) / 2;

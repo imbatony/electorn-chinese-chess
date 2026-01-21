@@ -1,11 +1,11 @@
-import {
-  GetUCCIEngine,
-} from "../src/main/UCCI";
-
 import os from "os";
+
 import {
   ENGINE_KEY_GG,
 } from "../src/common/constants";
+import {
+  GetUCCIEngine,
+} from "../src/main/UCCI";
 // test("Test ELEEYEEngine", () => {
 //   const engine = GetELEEYEEngine();
 //   engine.send(UCCI, () => {

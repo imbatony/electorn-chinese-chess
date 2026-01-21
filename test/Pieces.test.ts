@@ -1,16 +1,14 @@
-import {
-  PieceArray,
-  PieceCodeMap,
-  PieceIndexMap,
-  Advisor,
-  King,
-  Bishop,
-  Knight,
-  Rook,
-  Pawn,
-  Cannon,
-} from "../src/common/Pieces";
 import { FEN } from "../src/common/Fen";
+import {
+  Advisor,
+  Bishop,
+  Cannon,
+  King,
+  Knight,
+  Pawn,
+  PieceArray,
+  Rook,
+} from "../src/common/Pieces";
 
 test("Test King", () => {
   const red = new King(true);

@@ -1,4 +1,3 @@
-import { FEN } from "./Fen";
 
 export interface AboutWindowInfo {
   visit_source_code_text?: string;
@@ -23,16 +22,16 @@ export interface AboutWindowInfo {
   ipcMain?: Electron.IpcMain;
 }
 
-export const BoardStatusKey = "render:boardstatus"
-export const QueryMoveKey = "render:querymove"
-export const APPEXITKey = "close-me"
-export const BgmKey = "render:bgm"
-export const OP_BACK = "op:back"
-export const OP_RESTART = "op:restart"
-export const OP_ROTATION = "op:rotation"
-export const OP_TOGGLE_BGM = "op:togglebgm"
-export const OP_COYPY_FEN = "op:copyfen"
-export const OP_UPDATE_SIDE = "op:updateside"
+export const BoardStatusKey = 'render:boardstatus';
+export const QueryMoveKey = 'render:querymove';
+export const APPEXITKey = 'close-me';
+export const BgmKey = 'render:bgm';
+export const OP_BACK = 'op:back';
+export const OP_RESTART = 'op:restart';
+export const OP_ROTATION = 'op:rotation';
+export const OP_TOGGLE_BGM = 'op:togglebgm';
+export const OP_COYPY_FEN = 'op:copyfen';
+export const OP_UPDATE_SIDE = 'op:updateside';
 export interface BoardStatus {
   curFen: string;
   canBack: boolean;

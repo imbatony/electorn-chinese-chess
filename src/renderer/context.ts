@@ -1,28 +1,30 @@
 /* eslint-disable @typescript-eslint/no-empty-function */
 /* eslint-disable @typescript-eslint/no-unused-vars */
+import { createContext } from 'react';
+
 import {
+  APPEXITKey,
+  BgmKey,
   BoardStatus,
+  BoardStatusKey,
   OP_BACK,
   OP_RESTART,
   OP_ROTATION,
-  BoardStatusKey,
-  QueryMoveKey,
-  BgmKey,
   OP_TOGGLE_BGM,
-  APPEXITKey,
   OP_UPDATE_SIDE,
-} from "../common/IPCInfos";
-import { createContext } from "react";
-import { playBgm } from "./Sound";
-import { PlaySide } from "./types";
-const { ipcRenderer } = window.require("electron");
+  QueryMoveKey,
+} from '../common/IPCInfos';
+import { playBgm } from './Sound';
+import { PlaySide } from './types';
+
+const { ipcRenderer } = window.require('electron');
 let onback: () => void;
 let onRestart: () => void;
 let onRotation: () => void;
 let difficulty = 1;
 let bgmOn = true;
-let mode = "normal";
-let bgmType: "welcome" | "board" = "welcome";
+let mode = 'normal';
+let bgmType: 'welcome' | 'board' = 'welcome';
 
 const setBgmOn = (bgm: boolean) => {
   bgmOn = bgm;
@@ -30,14 +32,14 @@ const setBgmOn = (bgm: boolean) => {
 const setMode = (m: string) => {
   mode = m;
 };
-const setBgmType = (type: "welcome" | "board") => {
+const setBgmType = (type: 'welcome' | 'board') => {
   bgmType = type;
   playBgm(bgmOn, bgmType);
   ipcRenderer.send(BgmKey, bgmOn, bgmType);
 };
 const queryMove = (fenStr: string, turn: boolean) => {
   let dif = difficulty;
-  if (mode !== "normal") {
+  if (mode !== 'normal') {
     dif = null;
   }
   return ipcRenderer.invoke(QueryMoveKey, { fenStr, difficulty: dif, turn });
@@ -80,7 +82,7 @@ export const defaultChessState = {
   setDifficulty(diff: number) {
     difficulty = diff;
   },
-  queryMove(fenStr: string, turn: boolean) {
+  queryMove(fenStr: string, turn: boolean): Promise<string> {
     return queryMove(fenStr, turn);
   },
   setOnBack(backFunc: () => void) {
@@ -92,18 +94,16 @@ export const defaultChessState = {
   setOnRotation(rotationFunc: () => void) {
     onRotation = rotationFunc;
   },
-  redSide: "none",
-  setRedSide: (key: string) => {},
-  blackSide: "none",
-  setBlackSide: (key: string) => {},
+  redSide: 'none',
+  setRedSide: (_key: string) => {},
+  blackSide: 'none',
+  setBlackSide: (_key: string) => {},
   exit() {
     ipcRenderer.send(APPEXITKey);
   },
   syncSide: (obj: { red: string; black: string }) => {
     ipcRenderer.send(OP_UPDATE_SIDE, obj);
   },
-  setChangeSideCallBack: (
-    sideCallBackFunc: (prev: PlaySide, cur: PlaySide) => void
-  ) => {},
+  setChangeSideCallBack: (_sideCallBackFunc: (prev: PlaySide, cur: PlaySide) => void) => {},
 };
 export const ChessContext = createContext(defaultChessState);

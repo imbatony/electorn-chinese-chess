@@ -1,25 +1,25 @@
-import { BasePiece } from "./BaseChess";
+import { BasePiece } from './BaseChess';
 
 /**
  * 马
  */
 export class Knight extends BasePiece {
   GetChineseMovementName(
-    x: number,
-    y: number,
-    newX: number,
-    newY: number,
-    board: ReadonlyArray<ReadonlyArray<number>>
+    _x: number,
+    _y: number,
+    _newX: number,
+    _newY: number,
+    _board: ReadonlyArray<ReadonlyArray<number>>
   ): string {
-    throw new Error("Method not implemented.");
+    throw new Error('Method not implemented.');
   }
   GetName(): string {
-    return "马";
+    return '马';
   }
   GetCode(): string {
-    return this.isRed ? "N" : "n";
+    return this.isRed ? 'N' : 'n';
   }
-  CanCheck():boolean{
+  CanCheck(): boolean {
     return true;
   }
   GetAvailableMovement(
@@ -54,8 +54,7 @@ export class Knight extends BasePiece {
         tx >= 0 &&
         ty >= 0 &&
         ty <= 9 &&
-        (board[ty][tx] === 0 ||
-          ChessArray[board[ty][tx] - 1].IsRed() != this.isRed)
+        (board[ty][tx] === 0 || ChessArray[board[ty][tx] - 1].IsRed() != this.isRed)
       ) {
         let blockX = x;
         let blockY = y;

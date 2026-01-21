@@ -57,7 +57,7 @@ export abstract class BasePiece {
     y: number,
     newX: number,
     newY: number,
-    board: ReadonlyArray<ReadonlyArray<number>>,
+    board: ReadonlyArray<ReadonlyArray<number>>
   ): string;
   /**
    * 获得名称：如车
@@ -92,16 +92,16 @@ export abstract class BasePiece {
     pieceArray: ReadonlyArray<BasePiece>
   ): Array<[number, number]>;
 }
-export const MovementNameArray: ReadonlyArray<string> = [
-  "一",
-  "二",
-  "三",
-  "四",
-  "五",
-  "六",
-  "七",
-  "八",
-  "九",
+const MovementNameArray: ReadonlyArray<string> = [
+  '一',
+  '二',
+  '三',
+  '四',
+  '五',
+  '六',
+  '七',
+  '八',
+  '九',
 ];
 export const GetChineseMovementNameForSimpleChess = (
   x: number,
@@ -113,18 +113,18 @@ export const GetChineseMovementNameForSimpleChess = (
 ): string => {
   let actionName;
   const direction = isRed ? -1 : 1;
-  let positionTo = "";
-  let positionFrom = "" + (x + 1);
+  let positionTo = '';
+  let positionFrom = '' + (x + 1);
   if (newY != x) {
-    actionName = (newY - y) * direction > 0 ? "进" : "退";
+    actionName = (newY - y) * direction > 0 ? '进' : '退';
     const move = Math.abs(newY - y);
-    positionTo = "" + move;
+    positionTo = '' + move;
     if (isRed) {
       positionTo = MovementNameArray[move - 1];
       positionFrom = MovementNameArray[8 - x];
     }
   } else if (newX != x) {
-    actionName = "平";
+    actionName = '平';
     if (isRed) {
       positionTo = MovementNameArray[newX];
       positionFrom = MovementNameArray[8 - x];

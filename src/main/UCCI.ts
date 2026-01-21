@@ -1,27 +1,29 @@
-import { spawn, ChildProcessWithoutNullStreams } from "child_process";
+import { ChildProcessWithoutNullStreams, spawn } from 'child_process';
+import path from 'path';
+
 import {
+  DEFAULT_ENGINE_KEY,
   ENGINE_KEY_CYCLONE,
   ENGINE_KEY_ELEEYE,
-  DEFAULT_ENGINE_KEY,
-  ENGINE_NAME_ELEEYE,
-  ENGINE_NAME_CYCLONE,
   ENGINE_KEY_GG,
-  ENGINE_NAME_GG,
   ENGINE_KEY_NAO_AO,
+  ENGINE_NAME_CYCLONE,
+  ENGINE_NAME_ELEEYE,
+  ENGINE_NAME_GG,
   ENGINE_NAME_NAO_AO,
-} from "../common/constants";
-import FeiJiang from "./feijiang";
-const INFO = "info";
-const NO_BEST_MOVE = "nobestmove";
-const BEST_MOVE = "bestmove";
-const POSITION = "position";
-export const UCCI = "ucci";
-export const UCI = "uci";
-export const IS_READY = "isready";
-export const GO = "go";
-export const STOP = "stop";
-export const RESTART_COMMAND = "restart-ucci";
-export const QUIT = "quit";
+} from '../common/constants';
+import FeiJiangInstance from './feijiang';
+
+const INFO = 'info';
+const NO_BEST_MOVE = 'nobestmove';
+const BEST_MOVE = 'bestmove';
+const UCCI = 'ucci';
+const UCI = 'uci';
+const IS_READY = 'isready';
+const GO = 'go';
+const STOP = 'stop';
+const RESTART_COMMAND = 'restart-ucci';
+const QUIT = 'quit';
 
 export type UCCICallback = (err: Error, data: string) => void;
 export interface Info {
@@ -49,16 +51,16 @@ export interface QueryMoveOption {
  */
 export class ChessEngine {
   private callback: UCCICallback;
-  private resultBuffer = "";
+  private resultBuffer = '';
   public name: string;
   private IN_GO_WAITING = false;
   private release = true;
-  private type: "ucci" | "uci" = UCCI;
+  private type: 'ucci' | 'uci' = UCCI;
   private minDiff = 1;
   private maxDiff = 5;
   private thread = DEFAULT_THREAD_COUNT;
   private hashSize = DEFAULT_HASH_SIZE;
-  private engineDisplayName = "";
+  private engineDisplayName = '';
   private hasTreadOption = false;
   private hasHashSizeOption = false;
 
@@ -67,7 +69,7 @@ export class ChessEngine {
   constructor(
     UCCI_ENGINE_LOCATION: string,
     name: string,
-    type: "ucci" | "uci" = UCCI,
+    type: 'ucci' | 'uci' = UCCI,
     thread: number = DEFAULT_THREAD_COUNT,
     hashSize: number = DEFAULT_HASH_SIZE,
     minDiff = 1,
@@ -91,34 +93,34 @@ export class ChessEngine {
   }
 
   public async initEngine(): Promise<string> {
-    console.log("init engine ", this.name);
-    this.resultBuffer = "";
+    console.log('init engine ', this.name);
+    this.resultBuffer = '';
     const engineInfo = await this.sendAsync(this.type.toLocaleLowerCase());
-    const lines = engineInfo.split("\n");
+    const lines = engineInfo.split('\n');
     lines.forEach((l) => {
       if (this.type === UCCI) {
-        if (l.indexOf("id") !== -1) {
-          const block = l.split(" ");
-          if (block[1] === "name") {
-            this.engineDisplayName = block.slice(2).join(" ");
+        if (l.indexOf('id') !== -1) {
+          const block = l.split(' ');
+          if (block[1] === 'name') {
+            this.engineDisplayName = block.slice(2).join(' ');
           }
-        } else if (l.indexOf("option") !== -1) {
-          if (l.indexOf("threads") !== -1) {
+        } else if (l.indexOf('option') !== -1) {
+          if (l.indexOf('threads') !== -1) {
             this.hasTreadOption = true;
-          } else if (l.indexOf("hashsize") !== -1) {
+          } else if (l.indexOf('hashsize') !== -1) {
             this.hasHashSizeOption = true;
           }
         }
       } else {
-        if (l.indexOf("id") !== -1) {
-          const block = l.split(" ");
-          if (block[1] === "name") {
-            this.engineDisplayName = block.slice(2).join(" ");
+        if (l.indexOf('id') !== -1) {
+          const block = l.split(' ');
+          if (block[1] === 'name') {
+            this.engineDisplayName = block.slice(2).join(' ');
           }
-        } else if (l.indexOf("option") !== -1) {
-          if (l.indexOf("Threads") !== -1) {
+        } else if (l.indexOf('option') !== -1) {
+          if (l.indexOf('Threads') !== -1) {
             this.hasTreadOption = true;
-          } else if (l.indexOf("Hash") !== -1) {
+          } else if (l.indexOf('Hash') !== -1) {
             this.hasHashSizeOption = true;
           }
         }
@@ -140,7 +142,7 @@ export class ChessEngine {
       // eslint-disable-next-line @typescript-eslint/no-empty-function
       await this.sendAsync(command);
     }
-    await this.sendAsync("isready");
+    await this.sendAsync('isready');
     return engineInfo;
   }
   private connect(delayed: boolean) {
@@ -161,17 +163,17 @@ export class ChessEngine {
     //   // console.log("data once received from engine: ", textChunk);
     // });
 
-    this.posProc.on("exit", (_code) => {
+    this.posProc.on('exit', (_code) => {
       // console.log("Closed with code: ", code);
       // console.log("Restarting");
       if (!this.release) {
         this.init(); // Restart ...
-        this.callback(null, "Restarted ...");
+        this.callback(null, 'Restarted ...');
       }
     });
 
-    this.posProc.stdout.on("data", (data: any) => {
-      const textChunk = data.toString("utf8");
+    this.posProc.stdout.on('data', (data: any) => {
+      const textChunk = data.toString('utf8');
       this.resultBuffer += textChunk;
       // console.log("Buffered message received: ", this.resultBuffer, textChunk);
       // 普通返回，不知道有多少行，收到即返回；很可能丢东西，即返回长短不确定。
@@ -182,7 +184,7 @@ export class ChessEngine {
 
       const lastChar = textChunk.substring(textChunk.length - 1);
 
-      if (lastChar !== "\n") {
+      if (lastChar !== '\n') {
         // need buffer this
         return; // 不callback，继续接
       }
@@ -190,40 +192,42 @@ export class ChessEngine {
       switch (true) {
         // 如果含nobestmove，则为结束
         case this.resultBuffer.indexOf(NO_BEST_MOVE) !== -1:
-          console.log("receive nobestmove stop");
+          console.log('receive nobestmove stop');
           this.IN_GO_WAITING = false;
           this.resultBuffer += textChunk;
           this.callback(null, this.resultBuffer);
-          this.resultBuffer = ""; // 清空缓存
+          this.resultBuffer = ''; // 清空缓存
           break;
 
         // 如果含bestmove，则为结束
         case this.resultBuffer.indexOf(BEST_MOVE) !== -1:
-          console.log("receive bestmove stop");
+          console.log('receive bestmove stop');
           this.IN_GO_WAITING = false;
           this.resultBuffer += textChunk;
-          console.log("[out:bestmove]:", this.resultBuffer);
+          console.log('[out:bestmove]:', this.resultBuffer);
           this.callback(null, this.resultBuffer);
-          this.resultBuffer = ""; // 清空缓存
+          this.resultBuffer = ''; // 清空缓存
           break;
 
         // 如果含ucciok||uciok，则为结束
-        case this.resultBuffer.indexOf("ucciok") !== -1 ||
-          (this.resultBuffer.indexOf("uciok") !== -1 && this.resultBuffer.indexOf("option") !== -1  && this.resultBuffer.lastIndexOf("uciok") > this.resultBuffer.lastIndexOf("option")):
-          console.log("receive ok stop");
+        case this.resultBuffer.indexOf('ucciok') !== -1 ||
+          (this.resultBuffer.indexOf('uciok') !== -1 &&
+            this.resultBuffer.indexOf('option') !== -1 &&
+            this.resultBuffer.lastIndexOf('uciok') > this.resultBuffer.lastIndexOf('option')):
+          console.log('receive ok stop');
           this.IN_GO_WAITING = false;
           this.resultBuffer += textChunk;
-          console.log("[out:ok]:", this.resultBuffer);
+          console.log('[out:ok]:', this.resultBuffer);
           this.callback(null, this.resultBuffer);
-          this.resultBuffer = ""; // 清空缓存
+          this.resultBuffer = ''; // 清空缓存
           break;
         // 如果含bye，则为结束
-        case this.resultBuffer.indexOf("bye") !== -1:
-          console.log("receive bye stop");
+        case this.resultBuffer.indexOf('bye') !== -1:
+          console.log('receive bye stop');
           this.IN_GO_WAITING = false;
           this.resultBuffer += textChunk;
           this.callback(null, this.resultBuffer);
-          this.resultBuffer = ""; // 清空缓存
+          this.resultBuffer = ''; // 清空缓存
           break;
 
         // 如果含INFO，则将信息buffer后继续，不callback，继续接
@@ -249,19 +253,16 @@ export class ChessEngine {
     this.connect(false);
   }
 
-  public send(
-    command: string,
-    callbackFun: (err: Error, data: string) => void
-  ) {
-    this.resultBuffer = "";
-    console.log("send command:", command);
+  public send(command: string, callbackFun: (err: Error, data: string) => void) {
+    this.resultBuffer = '';
+    console.log('send command:', command);
     if (command === RESTART_COMMAND) {
       this.IN_GO_WAITING = false;
-      callbackFun(null, "Server might be restared.");
+      callbackFun(null, 'Server might be restared.');
       return;
     }
     this.callback = callbackFun;
-    this.posProc.stdin.write(command + "\n");
+    this.posProc.stdin.write(command + '\n');
     // console.log('callback is: ', callback)
 
     switch (true) {
@@ -275,7 +276,7 @@ export class ChessEngine {
         this.IN_GO_WAITING = true;
         break;
       case command.indexOf(QUIT) !== -1 && this.type === UCCI:
-          this.IN_GO_WAITING = true;
+        this.IN_GO_WAITING = true;
         break;
       case command.indexOf(STOP) !== -1:
         // This must have an imediate bestmove response, so do not callback now.
@@ -286,7 +287,7 @@ export class ChessEngine {
       default:
         // When command with no resonpse, such as position,
         // send http response instead, to prevent forever waiting
-        this.callback(null, "There is no reponse.");
+        this.callback(null, 'There is no reponse.');
         break;
     }
   }
@@ -296,8 +297,8 @@ export class ChessEngine {
         if (!err) {
           resolve(data);
         } else {
-          console.warn("error");
-          resolve("");
+          console.warn('error');
+          resolve('');
         }
       });
     });
@@ -307,7 +308,7 @@ export class ChessEngine {
     { difficulty, maxTime }: QueryMoveOption
   ): Promise<InfoAndMove | null> {
     if (this.type === UCI) {
-      await this.sendAsync("ucinewgame");
+      await this.sendAsync('ucinewgame');
     }
     let position = `position fen ${fen}`;
     if (this.type === UCI) {
@@ -324,7 +325,7 @@ export class ChessEngine {
 
     const go = this.getQueyForTime(time);
     setTimeout(() => {
-      this.posProc.stdin.write("stop" + "\n");
+      this.posProc.stdin.write('stop' + '\n');
     }, maxTime);
     const lines = await this.sendAsync(go);
 
@@ -333,33 +334,33 @@ export class ChessEngine {
       time: 0,
       nps: 0,
       pvList: new Array<Info>(),
-      bestmove: "",
-      ponder: "",
+      bestmove: '',
+      ponder: '',
     };
-    console.log("lines:\n", lines);
-    lines.split("\n").forEach((l) => {
-      if (l.startsWith("info")) {
-        const infos = l.substring(5).split(" ");
+    console.log('lines:\n', lines);
+    lines.split('\n').forEach((l) => {
+      if (l.startsWith('info')) {
+        const infos = l.substring(5).split(' ');
         const infoObj: Info = { depth: 0, score: 0, pv: [] };
         for (let i = 0; i < infos.length; i += 2) {
-          if (infos[i] == "score") {
+          if (infos[i] == 'score') {
             infoObj.score = parseInt(infos[i + 1]);
-          } else if (infos[i] == "depth") {
+          } else if (infos[i] == 'depth') {
             infoObj.score = parseInt(infos[i + 1]);
-          } else if (infos[i] == "nps") {
+          } else if (infos[i] == 'nps') {
             infoObj.score = parseInt(infos[i + 1]);
-          } else if (infos[i] == "pv") {
+          } else if (infos[i] == 'pv') {
             infoObj.pv = infos.slice(i);
           }
         }
-      } else if (l.startsWith("bestmove")) {
-        console.log("bestmove line:", l);
-        const infos = l.split(" ");
+      } else if (l.startsWith('bestmove')) {
+        console.log('bestmove line:', l);
+        const infos = l.split(' ');
         for (let i = 0; i < infos.length; i += 2) {
-          if (infos[i] == "bestmove") {
+          if (infos[i] == 'bestmove') {
             infoAndMove.bestmove = infos[i + 1].trim();
-            console.log("set best move:", infoAndMove.bestmove);
-          } else if (infos[i] == "ponder") {
+            console.log('set best move:', infoAndMove.bestmove);
+          } else if (infos[i] == 'ponder') {
             infoAndMove.ponder = infos[i + 1].trim();
           }
         }
@@ -371,27 +372,25 @@ export class ChessEngine {
   public async quit() {
     if (!this.release) {
       this.release = true;
-      await this.sendAsync("quit");
+      await this.sendAsync('quit');
       if (!this.posProc.killed) {
         const forcekill = this.posProc.kill();
-        console.warn("force kill ",forcekill);
+        console.warn('force kill ', forcekill);
       }
       this.posProc.unref();
     }
   }
 }
 
-import path from "path";
-import FeiJiangInstance from "./feijiang";
 let basePath = process.resourcesPath;
 
-if (process.env.NODE_ENV === "development" || !process.resourcesPath) {
-  basePath = path.join(process.cwd(), "assets");
+if (process.env.NODE_ENV === 'development' || !process.resourcesPath) {
+  basePath = path.join(process.cwd(), 'assets');
 }
-const ELEEYEFilePath = path.join(basePath, "engine/ElephantEye/BIN/ELEEYE.EXE");
-const cycloneFilePath = path.join(basePath, "engine/cyclone/cyclone.exe");
-const ggFilePath = path.join(basePath, "engine/gg20180531/NewGG.exe");
-const naoaoFilePath = path.join(basePath, "engine/sachess1.6/sachess_x86.exe");
+const ELEEYEFilePath = path.join(basePath, 'engine/ElephantEye/BIN/ELEEYE.EXE');
+const cycloneFilePath = path.join(basePath, 'engine/cyclone/cyclone.exe');
+const ggFilePath = path.join(basePath, 'engine/gg20180531/NewGG.exe');
+const naoaoFilePath = path.join(basePath, 'engine/sachess1.6/sachess_x86.exe');
 
 export const GetUCCIEngine = (key = DEFAULT_ENGINE_KEY): ChessEngine => {
   if (key === ENGINE_KEY_ELEEYE) {
@@ -409,12 +408,7 @@ export const GetUCCIEngine = (key = DEFAULT_ENGINE_KEY): ChessEngine => {
       FeiJiangInstance.engineThreadCount
     );
   } else if (key === ENGINE_KEY_GG) {
-    return new ChessEngine(
-      ggFilePath,
-      ENGINE_NAME_GG,
-      UCI,
-      FeiJiangInstance.engineThreadCount
-    );
+    return new ChessEngine(ggFilePath, ENGINE_NAME_GG, UCI, FeiJiangInstance.engineThreadCount);
   } else if (key === ENGINE_KEY_NAO_AO) {
     return new ChessEngine(
       naoaoFilePath,

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://unpkg.com/knip@latest/schema.json",
+  "entry": [
+    "src/main/index.ts",
+    "src/renderer/index.ts",
+    "src/renderer/about.ts"
+  ],
+  "project": ["src/**/*.{ts,tsx}"],
+  "ignore": [
+    "src/custom.d.ts"
+  ],
+  "ignoreDependencies": [
+    "@electron-forge/*",
+    "@vercel/webpack-asset-relocator-loader",
+    "css-loader",
+    "style-loader",
+    "node-loader",
+    "ts-loader",
+    "fork-ts-checker-webpack-plugin"
+  ]
+}

@@ -1,11 +1,11 @@
-import { Advisor } from "./pieces/Advisor";
-import { King } from "./pieces/King";
-import { Bishop } from "./pieces/Bishop";
-import { BasePiece } from "./pieces/BaseChess";
-import { Knight } from "./pieces/Knight";
-import { Rook } from "./pieces/Rook";
-import { Pawn } from "./pieces/Pawn";
-import { Cannon } from "./pieces/Cannon";
+import { Advisor } from './pieces/Advisor';
+import { BasePiece } from './pieces/BaseChess';
+import { Bishop } from './pieces/Bishop';
+import { Cannon } from './pieces/Cannon';
+import { King } from './pieces/King';
+import { Knight } from './pieces/Knight';
+import { Pawn } from './pieces/Pawn';
+import { Rook } from './pieces/Rook';
 
 const PieceArray: ReadonlyArray<BasePiece> = [
   new King(true),
@@ -24,23 +24,7 @@ const PieceArray: ReadonlyArray<BasePiece> = [
   new Pawn(false),
 ];
 
-const PieceCodeMap: ReadonlyMap<string, BasePiece> = new Map<string, BasePiece>(
-  PieceArray.map((e) => [e.GetCode(), e])
-);
-
 const PieceIndexMap: ReadonlyMap<string, number> = new Map<string, number>(
   PieceArray.map((e, i) => [e.GetCode(), i + 1])
 );
-export {
-  BasePiece,
-  PieceArray ,
-  PieceCodeMap ,
-  PieceIndexMap,
-  Advisor,
-  King,
-  Bishop,
-  Knight,
-  Rook,
-  Pawn,
-  Cannon,
-};
+export { Advisor, Bishop, Cannon, King, Knight, Pawn, PieceArray, PieceIndexMap, Rook };

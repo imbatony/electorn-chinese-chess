@@ -1,25 +1,25 @@
-import { BasePiece } from "./BaseChess";
+import { BasePiece } from './BaseChess';
 
 /**
  * 炮
  */
 export class Cannon extends BasePiece {
   GetChineseMovementName(
-    x: number,
-    y: number,
-    newX: number,
-    newY: number,
-    board: ReadonlyArray<ReadonlyArray<number>>
+    _x: number,
+    _y: number,
+    _newX: number,
+    _newY: number,
+    _board: ReadonlyArray<ReadonlyArray<number>>
   ): string {
-    throw new Error("Method not implemented.");
+    throw new Error('Method not implemented.');
   }
   GetName(): string {
-    return "炮";
+    return '炮';
   }
   GetCode(): string {
-    return this.isRed ? "C" : "c";
+    return this.isRed ? 'C' : 'c';
   }
-  CanCheck():boolean{
+  CanCheck(): boolean {
     return true;
   }
   GetAvailableMovement(

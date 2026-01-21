@@ -1,4 +1,4 @@
-import { BasePiece, GetChineseMovementNameForSimpleChess } from "./BaseChess";
+import { BasePiece, GetChineseMovementNameForSimpleChess } from './BaseChess';
 
 const isFacing = (
   k: King,
@@ -32,24 +32,16 @@ export class King extends BasePiece {
     y: number,
     newX: number,
     newY: number,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    board: ReadonlyArray<ReadonlyArray<number>>
+    _board: ReadonlyArray<ReadonlyArray<number>>
   ): string {
-    return GetChineseMovementNameForSimpleChess(
-      x,
-      y,
-      newX,
-      newY,
-      this.IsRed(),
-      this.GetName()
-    );
+    return GetChineseMovementNameForSimpleChess(x, y, newX, newY, this.IsRed(), this.GetName());
   }
 
   GetName(): string {
-    return this.isRed ? "帅" : "将";
+    return this.isRed ? '帅' : '将';
   }
   GetCode(): string {
-    return this.isRed ? "K" : "k";
+    return this.isRed ? 'K' : 'k';
   }
   GetAvailableMovement(
     x: number,

@@ -1,4 +1,5 @@
-import Konva from "konva";
+import Konva from 'konva';
+
 export const ChessSelected = (shape: Konva.Image) => {
   // use Konva methods to animate a shape
   shape.to({

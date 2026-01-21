@@ -1,13 +1,13 @@
-import { BoardStatus } from "../common/IPCInfos";
-import { DEFAULT_ENGINE_KEY } from "../common/constants";
-import { BrowserWindow } from "electron";
-import { GetUCCIEngine, ChessEngine } from "./UCCI";
-import os from "os";
+import { BrowserWindow } from 'electron';
+import os from 'os';
+
+import { DEFAULT_ENGINE_KEY } from '../common/constants';
+import { BoardStatus } from '../common/IPCInfos';
+import { ChessEngine, GetUCCIEngine } from './UCCI';
+
 const engines: Map<string, ChessEngine> = new Map<string, ChessEngine>();
 
-async function getEngineByKey(
-  key: string = DEFAULT_ENGINE_KEY
-): Promise<ChessEngine> {
+async function getEngineByKey(key: string = DEFAULT_ENGINE_KEY): Promise<ChessEngine> {
   let engine = engines.get(key);
   if (!engine) {
     engine = GetUCCIEngine(key);
@@ -38,7 +38,7 @@ const FeiJiangInstance: FeiJiang = {
   maxtime: 3000,
   engineThreadCount: 0,
   getEngineByKey: getEngineByKey,
-  getEngineByTurnAsync: (turn: boolean): Promise<ChessEngine> => {
+  getEngineByTurnAsync: (_turn: boolean): Promise<ChessEngine> => {
     return getEngineByKey(DEFAULT_ENGINE_KEY);
   },
   clearEngine: () => {
@@ -48,12 +48,10 @@ const FeiJiangInstance: FeiJiang = {
       })
     );
   },
-  redSide: "human",
-  blackSide: "human",
+  redSide: 'human',
+  blackSide: 'human',
 };
-FeiJiangInstance.getEngineByTurnAsync = (
-  turn: boolean
-): Promise<ChessEngine> => {
+FeiJiangInstance.getEngineByTurnAsync = (turn: boolean): Promise<ChessEngine> => {
   let engineKey = FeiJiangInstance.redSide;
   if (!turn) {
     engineKey = FeiJiangInstance.blackSide;

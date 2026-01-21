@@ -1,4 +1,5 @@
-import { BasePiece, GetChineseMovementNameForSimpleChess } from "./BaseChess";
+import { BasePiece, GetChineseMovementNameForSimpleChess } from './BaseChess';
+
 /**
  * 仕 or 士
  */
@@ -8,23 +9,15 @@ export class Advisor extends BasePiece {
     y: number,
     newX: number,
     newY: number,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    board: ReadonlyArray<ReadonlyArray<number>>
+    _board: ReadonlyArray<ReadonlyArray<number>>
   ): string {
-    return GetChineseMovementNameForSimpleChess(
-      x,
-      y,
-      newX,
-      newY,
-      this.IsRed(),
-      this.GetName()
-    );
+    return GetChineseMovementNameForSimpleChess(x, y, newX, newY, this.IsRed(), this.GetName());
   }
   GetName(): string {
-    return this.isRed ? "仕" : "士";
+    return this.isRed ? '仕' : '士';
   }
   GetCode(): string {
-    return this.isRed ? "A" : "a";
+    return this.isRed ? 'A' : 'a';
   }
   GetAvailableMovement(
     x: number,
@@ -58,8 +51,7 @@ export class Advisor extends BasePiece {
           movements.push([5, 7]);
         }
       }
-    }
-    else{
+    } else {
       if (
         (x === 3 && y === 0) ||
         (x === 5 && y === 0) ||

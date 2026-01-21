@@ -1,25 +1,25 @@
-import { BasePiece } from "./BaseChess";
+import { BasePiece } from './BaseChess';
 
 /**
  * 兵
  */
 export class Pawn extends BasePiece {
   GetChineseMovementName(
-    x: number,
-    y: number,
-    newX: number,
-    newY: number,
-    board: ReadonlyArray<ReadonlyArray<number>>
+    _x: number,
+    _y: number,
+    _newX: number,
+    _newY: number,
+    _board: ReadonlyArray<ReadonlyArray<number>>
   ): string {
-    throw new Error("Method not implemented.");
+    throw new Error('Method not implemented.');
   }
   GetName(): string {
-    return this.isRed ? "兵" : "卒";
+    return this.isRed ? '兵' : '卒';
   }
   GetCode(): string {
-    return this.isRed ? "P" : "p";
+    return this.isRed ? 'P' : 'p';
   }
-  CanCheck():boolean{
+  CanCheck(): boolean {
     return true;
   }
   GetAvailableMovement(
@@ -34,18 +34,17 @@ export class Pawn extends BasePiece {
       direction = 1;
     }
     movements.push([x, y + direction]);
-    if (this.isRed && y <= 4 || !this.isRed && y >= 5) {
+    if ((this.isRed && y <= 4) || (!this.isRed && y >= 5)) {
       movements.push([x - 1, y]);
       movements.push([x + 1, y]);
-    } 
+    }
     movements = movements.filter(([tx, ty]) => {
       return (
         tx <= 8 &&
         tx >= 0 &&
         ty >= 0 &&
         ty <= 9 &&
-        (board[ty][tx] === 0 ||
-          ChessArray[board[ty][tx] - 1].IsRed() != this.isRed)
+        (board[ty][tx] === 0 || ChessArray[board[ty][tx] - 1].IsRed() != this.isRed)
       );
     });
     return movements;
