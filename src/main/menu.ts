@@ -9,6 +9,9 @@ import {
   OP_ROTATION,
   OP_TOGGLE_BGM,
   OP_UPDATE_SIDE,
+  OP_SAVE,
+  OP_LOAD,
+  OP_EXPORT,
 } from '../common/IPCInfos';
 import { openAboutWindow } from './about';
 import FeiJiang from './feijiang';
@@ -19,7 +22,37 @@ export function GetTemplate() {
   const template: Array<MenuItemConstructorOptions | MenuItem> = [
     {
       label: '文件',
-      submenu: [isMac ? { role: 'close', label: '退出' } : { role: 'quit', label: '退出' }],
+      submenu: [
+        {
+          id: OP_SAVE,
+          label: '保存棋谱',
+          accelerator: 'CmdOrCtrl+S',
+          click: () => {
+            FeiJiang.mainWin.webContents.send(OP_SAVE);
+          },
+          enabled: !!FeiJiang.boardStaus && (FeiJiang.boardStaus.moveCount ?? 0) > 0,
+        },
+        {
+          id: OP_LOAD,
+          label: '加载棋谱',
+          accelerator: 'CmdOrCtrl+O',
+          click: () => {
+            FeiJiang.mainWin.webContents.send(OP_LOAD);
+          },
+          enabled: true,
+        },
+        {
+          id: OP_EXPORT,
+          label: '导出PGN',
+          accelerator: 'CmdOrCtrl+E',
+          click: () => {
+            FeiJiang.mainWin.webContents.send(OP_EXPORT);
+          },
+          enabled: !!FeiJiang.boardStaus && (FeiJiang.boardStaus.moveCount ?? 0) > 0,
+        },
+        { type: 'separator' },
+        isMac ? { role: 'close', label: '退出' } : { role: 'quit', label: '退出' },
+      ],
     },
     {
       label: '操作',
