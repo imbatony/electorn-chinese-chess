@@ -4,6 +4,9 @@
   "version": "0.0.15",
   "description": "飞将象棋是一款基于Electorn开发的开源象棋软件",
   "main": ".webpack/main",
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "homepage": "https://github.com/imbatony/electorn-chinese-chess",
   "bugs": {
     "url": "https://github.com/imbatony/electorn-chinese-chess/issues"
