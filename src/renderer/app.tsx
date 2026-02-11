@@ -14,7 +14,7 @@ const App = () => {
   const [redSide, setRedSideState] = React.useState('human');
   const [blackSide, setBlackSideState] = React.useState('human');
   React.useEffect(() => {
-    ipcRenderer.on(OP_UPDATE_SIDE, (evt, { red, black }) => {
+    ipcRenderer.on(OP_UPDATE_SIDE, (_evt: unknown, { red, black }: { red: string; black: string }) => {
       const prevRideSide = redSide;
       const prevBlckSide = blackSide;
       setRedSideState(red);

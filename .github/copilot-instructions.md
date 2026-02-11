@@ -170,6 +170,7 @@ npm run lint
 3. **进程通信**: 主进程和渲染进程通信必须通过 IPC
 4. **Canvas 渲染**: 棋盘使用 Konva 库渲染，注意性能优化
 5. **类型安全**: 尽量使用 TypeScript 类型，避免 `any`
+6. **CI 验证**: 每次功能实现完成后，必须本地验证 `npm run package`（webpack 编译）和 `npm test`（单元测试）均通过，以确保 PR CI 检测不会失败
 
 ## 功能开发指南
 
