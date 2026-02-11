@@ -221,3 +221,38 @@ body {
 .command-line div{
   padding-top: 15px;
 }
+
+/* PlaybackBar styles */
+.playback-bar {
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 0;
+}
+
+.playback-bar .playback-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding-top: 8px;
+}
+
+.playback-bar .playback-button {
+  width: 40px;
+  height: 28px;
+  padding: 0;
+  font-size: 14px;
+}
+
+.playback-bar .playback-position {
+  color: #fff;
+  font-size: 14px;
+  min-width: 60px;
+  text-align: center;
+}
+
+.playback-bar .playback-actions {
+  display: flex;
+  justify-content: center;
+  padding-top: 4px;
+}
