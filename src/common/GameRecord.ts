@@ -19,7 +19,7 @@ export type GameResult = 'red_win' | 'black_win' | 'draw' | 'incomplete';
  * 玩家信息
  */
 export interface PlayerInfo {
-  /** "human" 或引擎 key (e.g., "ELEEYE", "CYCLONE") */
+  /** "human" 或引擎 key (e.g., "ELEEYE", "GG") */
   type: 'human' | string;
   /** 显示名称 (默认为 type 标签) */
   name?: string;

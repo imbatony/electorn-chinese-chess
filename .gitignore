@@ -89,3 +89,17 @@ typings/
 out/
 assets/engine/gg20180531/__db.*
 assets/engine/gg20180531/book.db
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+Thumbs.db
+
+# Dist
+dist/
+
+# Temp
+*.tmp
+*.swp

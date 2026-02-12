@@ -1,21 +1,28 @@
 // In this file you can include the rest of your app's specific main process
 // code. You can also put them in separate files and import them here.
-import { clipboard,Menu, MenuItem, MenuItemConstructorOptions, Notification } from 'electron';
+import {
+  clipboard,
+  dialog,
+  Menu,
+  MenuItem,
+  MenuItemConstructorOptions,
+  Notification,
+} from 'electron';
 
 import {
   OP_BACK,
   OP_COYPY_FEN,
+  OP_EXPORT,
+  OP_LOAD,
   OP_RESTART,
   OP_ROTATION,
+  OP_SAVE,
   OP_TOGGLE_BGM,
   OP_UPDATE_SIDE,
-  OP_SAVE,
-  OP_LOAD,
-  OP_EXPORT,
 } from '../common/IPCInfos';
 import { openAboutWindow } from './about';
+import { EngineConfigService } from './EngineConfigService';
 import FeiJiang from './feijiang';
-import { GetAllEngineKeyNames } from './UCCI';
 
 const isMac = process.platform === 'darwin';
 export function GetTemplate() {
@@ -120,19 +127,35 @@ export function GetTemplate() {
                 });
               },
             },
-            ...GetAllEngineKeyNames().map((e) => {
-              return {
-                label: FeiJiang.redSide === e.key ? e.name + '☑️' : e.name,
-                click: () => {
-                  FeiJiang.redSide = e.key;
-                  Menu.setApplicationMenu(Menu.buildFromTemplate(GetTemplate()));
-                  FeiJiang.mainWin.webContents.send(OP_UPDATE_SIDE, {
-                    red: FeiJiang.redSide,
-                    black: FeiJiang.blackSide,
-                  });
-                },
-              };
-            }),
+            ...EngineConfigService.getInstance()
+              .getAllEngines()
+              .map((e) => {
+                const available = EngineConfigService.getInstance().isEngineAvailable(e);
+                return {
+                  label:
+                    FeiJiang.redSide === e.id
+                      ? e.name + '☑️'
+                      : available
+                        ? e.name
+                        : e.name + ' (不可用)',
+                  enabled: available,
+                  click: () => {
+                    if (!EngineConfigService.getInstance().isEngineAvailable(e)) {
+                      new Notification({
+                        title: '引擎不可用',
+                        body: '引擎文件不存在, 请重新加载或移除该引擎',
+                      }).show();
+                      return;
+                    }
+                    FeiJiang.redSide = e.id;
+                    Menu.setApplicationMenu(Menu.buildFromTemplate(GetTemplate()));
+                    FeiJiang.mainWin.webContents.send(OP_UPDATE_SIDE, {
+                      red: FeiJiang.redSide,
+                      black: FeiJiang.blackSide,
+                    });
+                  },
+                };
+              }),
           ],
         },
         {
@@ -149,25 +172,108 @@ export function GetTemplate() {
                 });
               },
             },
-            ...GetAllEngineKeyNames().map((e) => {
-              return {
-                label: FeiJiang.blackSide === e.key ? e.name + '☑️' : e.name,
-                click: () => {
-                  FeiJiang.blackSide = e.key;
-                  Menu.setApplicationMenu(Menu.buildFromTemplate(GetTemplate()));
-                  FeiJiang.mainWin.webContents.send(OP_UPDATE_SIDE, {
-                    red: FeiJiang.redSide,
-                    black: FeiJiang.blackSide,
-                  });
-                },
-              };
-            }),
+            ...EngineConfigService.getInstance()
+              .getAllEngines()
+              .map((e) => {
+                const available = EngineConfigService.getInstance().isEngineAvailable(e);
+                return {
+                  label:
+                    FeiJiang.blackSide === e.id
+                      ? e.name + '☑️'
+                      : available
+                        ? e.name
+                        : e.name + ' (不可用)',
+                  enabled: available,
+                  click: () => {
+                    if (!EngineConfigService.getInstance().isEngineAvailable(e)) {
+                      new Notification({
+                        title: '引擎不可用',
+                        body: '引擎文件不存在, 请重新加载或移除该引擎',
+                      }).show();
+                      return;
+                    }
+                    FeiJiang.blackSide = e.id;
+                    Menu.setApplicationMenu(Menu.buildFromTemplate(GetTemplate()));
+                    FeiJiang.mainWin.webContents.send(OP_UPDATE_SIDE, {
+                      red: FeiJiang.redSide,
+                      black: FeiJiang.blackSide,
+                    });
+                  },
+                };
+              }),
           ],
         },
       ],
     },
     {
       label: '引擎设置',
+      submenu: [
+        {
+          label: '加载引擎...',
+          click: async () => {
+            const result = await dialog.showOpenDialog(FeiJiang.mainWin, {
+              title: '选择引擎文件',
+              filters: [{ name: 'Engine', extensions: ['exe'] }],
+              properties: ['openFile'],
+            });
+            if (result.canceled || result.filePaths.length === 0) return;
+
+            const exePath = result.filePaths[0];
+            const configService = EngineConfigService.getInstance();
+
+            try {
+              const probeResult = await configService.probeEngine(exePath);
+              if (!probeResult.success) {
+                new Notification({
+                  title: '加载失败',
+                  body: probeResult.error || '无法识别引擎协议',
+                }).show();
+                return;
+              }
+
+              configService.addCustomEngine(exePath, probeResult);
+              Menu.setApplicationMenu(Menu.buildFromTemplate(GetTemplate()));
+              new Notification({
+                title: '加载成功',
+                body: `已添加引擎: ${probeResult.name || exePath}`,
+              }).show();
+            } catch (err) {
+              new Notification({
+                title: '加载失败',
+                body: err instanceof Error ? err.message : '未知错误',
+              }).show();
+            }
+          },
+        },
+        { type: 'separator' },
+        ...(() => {
+          const configService = EngineConfigService.getInstance();
+          const customEngines = configService.getAllEngines().filter((e) => !e.builtin);
+          if (customEngines.length === 0) {
+            return [{ label: '暂无自定义引擎', enabled: false }] as MenuItemConstructorOptions[];
+          }
+          return customEngines.map((e) => ({
+            label: `${e.name} ❌ 移除`,
+            click: () => {
+              // Check if engine is in use
+              const engines = FeiJiang.engines;
+              if (engines.has(e.id)) {
+                new Notification({
+                  title: '无法移除',
+                  body: '该引擎正在使用中, 请先切换到其他引擎',
+                }).show();
+                return;
+              }
+              configService.removeCustomEngine(e.id);
+              Menu.setApplicationMenu(Menu.buildFromTemplate(GetTemplate()));
+              new Notification({
+                title: '移除成功',
+                body: `已移除引擎: ${e.name}`,
+              }).show();
+            },
+          })) as MenuItemConstructorOptions[];
+        })(),
+      ],
     },
     {
       role: 'help',

@@ -83,8 +83,7 @@ export class PgnExporter {
     // 引擎名称映射
     const engineNames: Record<string, string> = {
       ELEEYE: '象眼',
-      CYCLONE: '旋风',
-      JIHOO: '佳佳',
+      GG: '佳佳',
       SACHESS: '南奥',
     };
     return engineNames[type] || type;

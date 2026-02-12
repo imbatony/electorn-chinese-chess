@@ -2,6 +2,7 @@ import { app, BrowserWindow, dialog, globalShortcut,Menu } from 'electron';
 import path from 'path';
 
 import { AutoSaveCheckKey } from '../common/IPCInfos';
+import { EngineConfigService } from './EngineConfigService';
 import FeiJiang from './feijiang';
 import { gameRecordService } from './GameRecordService';
 import { InitIPC } from './ipc';
@@ -68,18 +69,20 @@ const createWindow = (): void => {
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.on('ready', () => {
+  // 初始化引擎配置服务
+  EngineConfigService.getInstance().init();
   // 初始化棋谱保存目录
   gameRecordService.initDirectories();
   createWindow();
-  
+
   // 检查自动保存恢复
   mainWindow.webContents.on('did-finish-load', async () => {
     const autoSaveResult = gameRecordService.checkAutoSave();
     if (autoSaveResult.hasAutoSave && autoSaveResult.record) {
-      const timestamp = autoSaveResult.timestamp 
-        ? new Date(autoSaveResult.timestamp).toLocaleString() 
+      const timestamp = autoSaveResult.timestamp
+        ? new Date(autoSaveResult.timestamp).toLocaleString()
         : '未知时间';
-      
+
       const result = await dialog.showMessageBox(mainWindow, {
         type: 'question',
         buttons: ['恢复对局', '放弃'],
@@ -88,7 +91,7 @@ app.on('ready', () => {
         title: '恢复未保存的对局',
         message: `发现上次未保存的对局记录 (${timestamp})，是否恢复？`,
       });
-      
+
       if (result.response === 0) {
         // 恢复对局
         mainWindow.webContents.send(AutoSaveCheckKey, autoSaveResult);
@@ -115,12 +118,12 @@ app.on('window-all-closed', () => {
 let isQuitting = false;
 app.on('before-quit', async (event) => {
   if (isQuitting) return;
-  
+
   // 如果有自动保存文件，说明有未保存的对局
   const autoSaveResult = gameRecordService.checkAutoSave();
   if (autoSaveResult.hasAutoSave && mainWindow && !mainWindow.isDestroyed()) {
     event.preventDefault();
-    
+
     const result = await dialog.showMessageBox(mainWindow, {
       type: 'warning',
       buttons: ['放弃对局', '取消退出'],
@@ -129,7 +132,7 @@ app.on('before-quit', async (event) => {
       title: '未保存的对局',
       message: '当前对局尚未保存，是否放弃对局并退出？',
     });
-    
+
     if (result.response === 0) {
       // 放弃对局，清理自动保存
       gameRecordService.discardAutoSave();
