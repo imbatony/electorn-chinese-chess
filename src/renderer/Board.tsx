@@ -20,6 +20,8 @@ const Board = () => {
   const [rotation, setRotation] = useState(rotationParm);
   const [isDirty, setIsDirty] = useState(false);
   const lastSavedMoveCount = useRef(0);
+  /** 防止同一局面重复发起 AI 查询 */
+  const queryPending = useRef(false);
   const {
     fen, push, back, canback, restart,
     moveIndex, moveCount, isPlaybackMode,
@@ -40,18 +42,24 @@ const Board = () => {
     (prev: PlaySide, cur: PlaySide) => {
       // 回放模式下不触发 AI
       if (isPlaybackMode) return;
+      if (queryPending.current) return;
       
       console.log(prev, cur);
+      let shouldQuery = false;
       if (prev.red != cur.red && fen.isRedTurn() && prev.red === 'human') {
-        chessCtx.queryMove(fen.getFenWithMove(), fen.isRedTurn()).then((move) => {
-          console.log('move:', move);
-          event.emit('move', move);
-        });
+        shouldQuery = true;
       } else if (prev.black != cur.black && !fen.isRedTurn() && prev.black === 'human') {
+        shouldQuery = true;
+      }
+      if (shouldQuery) {
+        queryPending.current = true;
         chessCtx.queryMove(fen.getFenWithMove(), fen.isRedTurn()).then((move) => {
+          queryPending.current = false;
           console.log('move:', move);
-          event.emit('move', move);
-        });
+          if (move && move.length >= 4) {
+            event.emit('move', move);
+          }
+        }).catch(() => { queryPending.current = false; });
       }
     },
     [fen, isPlaybackMode]
@@ -84,11 +92,17 @@ const Board = () => {
     const needquey = fen.isRedTurn()
       ? chessCtx.redSide !== 'human'
       : chessCtx.blackSide !== 'human';
-    if (needquey) {
+    if (needquey && !queryPending.current) {
+      queryPending.current = true;
       chessCtx.queryMove(fen.getFenWithMove(), fen.isRedTurn()).then((move) => {
+        queryPending.current = false;
         console.log('move:', move);
-        event.emit('move', move);
-      });
+        if (move && move.length >= 4) {
+          event.emit('move', move);
+        } else {
+          console.warn('Engine returned invalid move, skipped:', move);
+        }
+      }).catch(() => { queryPending.current = false; });
     }
   }, [canback, fen, moveCount, isPlaybackMode]);
 
