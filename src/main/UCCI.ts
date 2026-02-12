@@ -1,18 +1,6 @@
 import { ChildProcessWithoutNullStreams, spawn } from 'child_process';
-import path from 'path';
 
-import {
-  DEFAULT_ENGINE_KEY,
-  ENGINE_KEY_CYCLONE,
-  ENGINE_KEY_ELEEYE,
-  ENGINE_KEY_GG,
-  ENGINE_KEY_NAO_AO,
-  ENGINE_NAME_CYCLONE,
-  ENGINE_NAME_ELEEYE,
-  ENGINE_NAME_GG,
-  ENGINE_NAME_NAO_AO,
-} from '../common/constants';
-import FeiJiangInstance from './feijiang';
+import { Info as NewInfo, InfoAndMove as NewInfoAndMove, OnInfoCallback } from './engine-types';
 
 const INFO = 'info';
 const NO_BEST_MOVE = 'nobestmove';
@@ -25,20 +13,107 @@ const STOP = 'stop';
 const RESTART_COMMAND = 'restart-ucci';
 const QUIT = 'quit';
 
+/**
+ * info 行解析纯函数.
+ * 使用关键字驱动的线性扫描, 支持所有 UCI/UCCI info 字段.
+ *
+ * @param line 原始 info 行 (含 'info' 前缀)
+ * @returns 解析后的 Info 对象, 无法解析则返回 null
+ */
+export function parseInfoLine(line: string): NewInfo | null {
+  if (!line || !line.trimStart().startsWith('info')) {
+    return null;
+  }
+
+  const tokens = line.trim().split(/\s+/);
+  // Skip the 'info' token
+  let i = tokens.indexOf('info');
+  if (i === -1) return null;
+  i++;
+
+  let depth: number | undefined;
+  let seldepth: number | undefined;
+  let score: number | undefined;
+  let scoreType: 'cp' | 'mate' = 'cp';
+  let nodes: number | undefined;
+  let nps: number | undefined;
+  let time: number | undefined;
+  let multipv: number | undefined;
+  let pv: string[] | undefined;
+
+  while (i < tokens.length) {
+    const token = tokens[i];
+
+    switch (token) {
+      case 'depth':
+        depth = parseInt(tokens[++i], 10);
+        break;
+      case 'seldepth':
+        seldepth = parseInt(tokens[++i], 10);
+        break;
+      case 'score': {
+        const next = tokens[i + 1];
+        if (next === 'cp') {
+          scoreType = 'cp';
+          i++;
+          score = parseInt(tokens[++i], 10);
+        } else if (next === 'mate') {
+          scoreType = 'mate';
+          i++;
+          score = parseInt(tokens[++i], 10);
+        } else {
+          // UCCI style: score is directly a centipawn value
+          scoreType = 'cp';
+          score = parseInt(tokens[++i], 10);
+        }
+        break;
+      }
+      case 'nodes':
+        nodes = parseInt(tokens[++i], 10);
+        break;
+      case 'nps':
+        nps = parseInt(tokens[++i], 10);
+        break;
+      case 'time':
+        time = parseInt(tokens[++i], 10);
+        break;
+      case 'multipv':
+        multipv = parseInt(tokens[++i], 10);
+        break;
+      case 'pv':
+        // All remaining tokens are moves
+        pv = tokens.slice(i + 1);
+        i = tokens.length; // Exit loop
+        break;
+      default:
+        // Unknown token (e.g., 'string', 'currmove', etc.), skip
+        break;
+    }
+    i++;
+  }
+
+  // Must have at least depth to be a valid info line
+  if (depth === undefined) {
+    return null;
+  }
+
+  const result: NewInfo = {
+    depth,
+    score: score ?? 0,
+    scoreType,
+    pv: pv ?? [],
+  };
+
+  if (seldepth !== undefined) result.seldepth = seldepth;
+  if (nodes !== undefined) result.nodes = nodes;
+  if (nps !== undefined) result.nps = nps;
+  if (time !== undefined) result.time = time;
+  if (multipv !== undefined) result.multipv = multipv;
+
+  return result;
+}
+
 export type UCCICallback = (err: Error, data: string) => void;
-export interface Info {
-  depth: number;
-  score: number;
-  pv: Array<string>;
-}
-export interface InfoAndMove {
-  nodes: number;
-  nps: number;
-  pvList: Array<Info>;
-  time: number;
-  bestmove: string;
-  ponder: string;
-}
 const DEFAULT_HASH_SIZE = 128;
 const DEFAULT_THREAD_COUNT = 4;
 
@@ -73,7 +148,8 @@ export class ChessEngine {
     thread: number = DEFAULT_THREAD_COUNT,
     hashSize: number = DEFAULT_HASH_SIZE,
     minDiff = 1,
-    maxDiff = 3
+    maxDiff = 3,
+    _useCliArgs = false // 保留参数以保持 API 兼容性，但不再使用
   ) {
     this.UCCI_ENGINE_LOCATION = UCCI_ENGINE_LOCATION;
     this.name = name;
@@ -95,6 +171,7 @@ export class ChessEngine {
   public async initEngine(): Promise<string> {
     console.log('init engine ', this.name);
     this.resultBuffer = '';
+    // 所有引擎都通过 stdin 发送协议命令来初始化
     const engineInfo = await this.sendAsync(this.type.toLocaleLowerCase());
     const lines = engineInfo.split('\n');
     lines.forEach((l) => {
@@ -156,6 +233,8 @@ export class ChessEngine {
   }
   private init() {
     // console.log("In init ...", this.UCCI_ENGINE_LOCATION);
+    // 所有引擎（UCI 和 UCCI）都通过标准输入接收命令
+    // 不使用 CLI 参数，因为某些引擎（如 Pikafish）使用 CLI 参数 uci 时会在输出后立即退出
     this.posProc = spawn(this.UCCI_ENGINE_LOCATION, []);
 
     // this.posProc.stdout.once("data", (data: any) => {
@@ -194,7 +273,6 @@ export class ChessEngine {
         case this.resultBuffer.indexOf(NO_BEST_MOVE) !== -1:
           console.log('receive nobestmove stop');
           this.IN_GO_WAITING = false;
-          this.resultBuffer += textChunk;
           this.callback(null, this.resultBuffer);
           this.resultBuffer = ''; // 清空缓存
           break;
@@ -203,7 +281,6 @@ export class ChessEngine {
         case this.resultBuffer.indexOf(BEST_MOVE) !== -1:
           console.log('receive bestmove stop');
           this.IN_GO_WAITING = false;
-          this.resultBuffer += textChunk;
           console.log('[out:bestmove]:', this.resultBuffer);
           this.callback(null, this.resultBuffer);
           this.resultBuffer = ''; // 清空缓存
@@ -216,7 +293,6 @@ export class ChessEngine {
             this.resultBuffer.lastIndexOf('uciok') > this.resultBuffer.lastIndexOf('option')):
           console.log('receive ok stop');
           this.IN_GO_WAITING = false;
-          this.resultBuffer += textChunk;
           console.log('[out:ok]:', this.resultBuffer);
           this.callback(null, this.resultBuffer);
           this.resultBuffer = ''; // 清空缓存
@@ -225,14 +301,22 @@ export class ChessEngine {
         case this.resultBuffer.indexOf('bye') !== -1:
           console.log('receive bye stop');
           this.IN_GO_WAITING = false;
-          this.resultBuffer += textChunk;
+          this.callback(null, this.resultBuffer);
+          this.resultBuffer = ''; // 清空缓存
+          break;
+
+        // 如果含readyok，则为 isready 命令的响应
+        case this.resultBuffer.indexOf('readyok') !== -1:
+          console.log('receive readyok stop');
+          this.IN_GO_WAITING = false;
+          console.log('[out:readyok]:', this.resultBuffer);
           this.callback(null, this.resultBuffer);
           this.resultBuffer = ''; // 清空缓存
           break;
 
         // 如果含INFO，则将信息buffer后继续，不callback，继续接
         case this.resultBuffer.indexOf(INFO) !== -1:
-          this.resultBuffer += textChunk;
+          // 继续缓存，不callback
           break;
 
         default:
@@ -243,10 +327,8 @@ export class ChessEngine {
               // then callback is null. Might cause error.
               this.callback(null, textChunk);
             }
-          } else {
-            // 还是INFO的等待返回中，必须继续等
-            this.resultBuffer += textChunk;
           }
+          // else: 还是INFO的等待返回中，必须继续等，不做任何操作
           break;
       }
     });
@@ -271,6 +353,7 @@ export class ChessEngine {
         this.IN_GO_WAITING = true;
         break;
       case command.indexOf(IS_READY) !== -1:
+        this.IN_GO_WAITING = true;
         break;
       case command.indexOf(GO) !== -1:
         this.IN_GO_WAITING = true;
@@ -305,15 +388,14 @@ export class ChessEngine {
   }
   public async infoAndMove(
     fen: string,
-    { difficulty, maxTime }: QueryMoveOption
-  ): Promise<InfoAndMove | null> {
+    { difficulty, maxTime }: QueryMoveOption,
+    onInfo?: OnInfoCallback
+  ): Promise<NewInfoAndMove | null> {
     if (this.type === UCI) {
       await this.sendAsync('ucinewgame');
     }
-    let position = `position fen ${fen}`;
-    if (this.type === UCI) {
-      position = `fen ${fen}`;
-    }
+    // UCI 和 UCCI 的 position 命令格式相同
+    const position = `position fen ${fen}`;
     await this.sendAsync(position);
     let time = maxTime;
     if (difficulty) {
@@ -329,44 +411,42 @@ export class ChessEngine {
     }, maxTime);
     const lines = await this.sendAsync(go);
 
-    const infoAndMove: InfoAndMove = {
-      nodes: 0,
-      time: 0,
-      nps: 0,
-      pvList: new Array<Info>(),
+    const result: NewInfoAndMove = {
+      pvList: [],
       bestmove: '',
-      ponder: '',
     };
     console.log('lines:\n', lines);
     lines.split('\n').forEach((l) => {
-      if (l.startsWith('info')) {
-        const infos = l.substring(5).split(' ');
-        const infoObj: Info = { depth: 0, score: 0, pv: [] };
-        for (let i = 0; i < infos.length; i += 2) {
-          if (infos[i] == 'score') {
-            infoObj.score = parseInt(infos[i + 1]);
-          } else if (infos[i] == 'depth') {
-            infoObj.score = parseInt(infos[i + 1]);
-          } else if (infos[i] == 'nps') {
-            infoObj.score = parseInt(infos[i + 1]);
-          } else if (infos[i] == 'pv') {
-            infoObj.pv = infos.slice(i);
+      const trimmed = l.trim();
+      if (trimmed.startsWith('info')) {
+        const parsed = parseInfoLine(trimmed);
+        if (parsed) {
+          result.pvList.push(parsed);
+          if (onInfo) {
+            onInfo(parsed);
           }
         }
-      } else if (l.startsWith('bestmove')) {
-        console.log('bestmove line:', l);
-        const infos = l.split(' ');
-        for (let i = 0; i < infos.length; i += 2) {
-          if (infos[i] == 'bestmove') {
-            infoAndMove.bestmove = infos[i + 1].trim();
-            console.log('set best move:', infoAndMove.bestmove);
-          } else if (infos[i] == 'ponder') {
-            infoAndMove.ponder = infos[i + 1].trim();
+      } else if (trimmed.startsWith('bestmove')) {
+        const tokens = trimmed.split(/\s+/);
+        for (let i = 0; i < tokens.length; i++) {
+          if (tokens[i] === 'bestmove' && i + 1 < tokens.length) {
+            result.bestmove = tokens[i + 1].trim();
+          } else if (tokens[i] === 'ponder' && i + 1 < tokens.length) {
+            result.ponder = tokens[i + 1].trim();
           }
         }
       }
     });
-    return infoAndMove;
+
+    // Fill summary fields from last info line
+    if (result.pvList.length > 0) {
+      const lastInfo = result.pvList[result.pvList.length - 1];
+      result.nodes = lastInfo.nodes;
+      result.nps = lastInfo.nps;
+      result.time = lastInfo.time;
+    }
+
+    return result;
   }
 
   public async quit() {
@@ -380,55 +460,91 @@ export class ChessEngine {
       this.posProc.unref();
     }
   }
-}
 
-let basePath = process.resourcesPath;
+  // ========================================================================
+  // 分析模式 (T029)
+  // ========================================================================
 
-if (process.env.NODE_ENV === 'development' || !process.resourcesPath) {
-  basePath = path.join(process.cwd(), 'assets');
-}
-const ELEEYEFilePath = path.join(basePath, 'engine/ElephantEye/BIN/ELEEYE.EXE');
-const cycloneFilePath = path.join(basePath, 'engine/cyclone/cyclone.exe');
-const ggFilePath = path.join(basePath, 'engine/gg20180531/NewGG.exe');
-const naoaoFilePath = path.join(basePath, 'engine/sachess1.6/sachess_x86.exe');
+  private analysisOnInfo: OnInfoCallback | null = null;
+  private analysisPvList: NewInfo[] = [];
+  private analysisStdoutHandler: ((data: Buffer) => void) | null = null;
 
-export const GetUCCIEngine = (key = DEFAULT_ENGINE_KEY): ChessEngine => {
-  if (key === ENGINE_KEY_ELEEYE) {
-    return new ChessEngine(
-      ELEEYEFilePath,
-      ENGINE_NAME_ELEEYE,
-      UCCI,
-      FeiJiangInstance.engineThreadCount
-    );
-  } else if (key === ENGINE_KEY_CYCLONE) {
-    return new ChessEngine(
-      cycloneFilePath,
-      ENGINE_NAME_CYCLONE,
-      UCCI,
-      FeiJiangInstance.engineThreadCount
-    );
-  } else if (key === ENGINE_KEY_GG) {
-    return new ChessEngine(ggFilePath, ENGINE_NAME_GG, UCI, FeiJiangInstance.engineThreadCount);
-  } else if (key === ENGINE_KEY_NAO_AO) {
-    return new ChessEngine(
-      naoaoFilePath,
-      ENGINE_NAME_NAO_AO,
-      UCI,
-      FeiJiangInstance.engineThreadCount
-    );
-  } else {
-    return new ChessEngine(ELEEYEFilePath, ENGINE_NAME_ELEEYE);
+  /**
+   * 启动无限分析模式.
+   * 发送 position + go infinite, 通过 onInfo 回调实时推送分析数据.
+   */
+  public async analyzePosition(fen: string, onInfo: OnInfoCallback): Promise<void> {
+    this.analysisOnInfo = onInfo;
+    this.analysisPvList = [];
+
+    // UCI 和 UCCI 的 position 命令格式相同
+    const position = `position fen ${fen}`;
+    await this.sendAsync(position);
+
+    // Register a temporary stdout handler for analysis
+    this.analysisStdoutHandler = (data: Buffer) => {
+      const text = data.toString('utf8');
+      const lines = text.split('\n');
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed.startsWith('info')) {
+          const parsed = parseInfoLine(trimmed);
+          if (parsed && this.analysisOnInfo) {
+            this.analysisPvList.push(parsed);
+            this.analysisOnInfo(parsed);
+          }
+        }
+      }
+    };
+    this.posProc.stdout.on('data', this.analysisStdoutHandler);
+
+    // Send go infinite (don't wait for bestmove)
+    this.posProc.stdin.write('go infinite\n');
   }
-};
-interface EngineKeyName {
-  key: string;
-  name: string;
+
+  /**
+   * 停止当前分析, 发送 stop 命令.
+   * 引擎会返回最终的 bestmove.
+   */
+  public async stopAnalysis(): Promise<NewInfoAndMove> {
+    // Remove analysis handler
+    if (this.analysisStdoutHandler) {
+      this.posProc.stdout.removeListener('data', this.analysisStdoutHandler);
+      this.analysisStdoutHandler = null;
+    }
+    this.analysisOnInfo = null;
+
+    const response = await this.sendAsync('stop');
+    const result: NewInfoAndMove = {
+      pvList: this.analysisPvList,
+      bestmove: '',
+    };
+
+    // Parse bestmove from response
+    const lines = response.split('\n');
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed.startsWith('bestmove')) {
+        const tokens = trimmed.split(/\s+/);
+        for (let i = 0; i < tokens.length; i++) {
+          if (tokens[i] === 'bestmove' && i + 1 < tokens.length) {
+            result.bestmove = tokens[i + 1].trim();
+          } else if (tokens[i] === 'ponder' && i + 1 < tokens.length) {
+            result.ponder = tokens[i + 1].trim();
+          }
+        }
+      }
+    }
+
+    // Fill summary from last info
+    if (result.pvList.length > 0) {
+      const lastInfo = result.pvList[result.pvList.length - 1];
+      result.nodes = lastInfo.nodes;
+      result.nps = lastInfo.nps;
+      result.time = lastInfo.time;
+    }
+
+    this.analysisPvList = [];
+    return result;
+  }
 }
-export const GetAllEngineKeyNames = (): EngineKeyName[] => {
-  return [
-    { key: ENGINE_KEY_ELEEYE, name: ENGINE_NAME_ELEEYE },
-    { key: ENGINE_KEY_CYCLONE, name: ENGINE_NAME_CYCLONE },
-    { key: ENGINE_KEY_GG, name: ENGINE_NAME_GG },
-    { key: ENGINE_KEY_NAO_AO, name: ENGINE_NAME_NAO_AO },
-  ];
-};

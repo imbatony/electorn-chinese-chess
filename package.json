@@ -1,7 +1,7 @@
 {
   "name": "electorn-chinese-chess",
   "productName": "飞将象棋",
-  "version": "0.0.15",
+  "version": "0.0.16",
   "description": "飞将象棋是一款基于Electorn开发的开源象棋软件",
   "main": ".webpack/main",
   "engines": {

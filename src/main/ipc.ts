@@ -2,54 +2,64 @@ import { app, ipcMain,Menu } from 'electron';
 
 import {
   APPEXITKey as AppExitKey,
+  AutoSaveCheckKey,
+  AutoSaveDiscardKey,
+  AutoSaveRecoverKey,
+  AutoSaveRequest,
+  AutoSaveWriteKey,
   BgmKey,
   BoardStatus,
   BoardStatusKey,
+  CheckDirtyKey,
+  ExportExecuteKey,
+  ExportRequest,
+  LoadExecuteKey,
   OP_UPDATE_SIDE,
   QueryMoveKey,
   SaveExecuteKey,
   SaveRequest,
-  LoadExecuteKey,
-  ExportExecuteKey,
-  ExportRequest,
-  AutoSaveWriteKey,
-  AutoSaveRequest,
-  AutoSaveCheckKey,
-  AutoSaveRecoverKey,
-  AutoSaveDiscardKey,
-  CheckDirtyKey,
 } from '../common/IPCInfos';
+import { PgnExporter } from '../common/PgnExporter';
 import FeiJiang from './feijiang';
 import { gameRecordService } from './GameRecordService';
 import { GetTemplate } from './menu';
-import { PgnExporter } from '../common/PgnExporter';
 
 export function InitIPC() {
   ipcMain.on(AppExitKey, (_evt, _arg): void => {
     app.quit();
   });
-  ipcMain.handle(QueryMoveKey, async (event, { fenStr, difficulty, turn }) => {
-    // const result = await fetch(
-    //   `http://www.chessdb.cn/chessdb.php?action=querybest&board=${fenStr}`
-    // );
-    // return await result.text();
-    const engine = await FeiJiang.getEngineByTurnAsync(turn);
-    const dif: number | null = difficulty;
+  // 查询锁: 串行化所有引擎查询, 防止同一引擎实例上的并发 sendAsync 互相覆盖 callback
+  let queryLock: Promise<void> = Promise.resolve();
 
-    console.log(
-      `Recieve:${fenStr},difficulty ${difficulty},query engine ${engine.name} to get best move`
-    );
-    const info = await engine.infoAndMove(fenStr, {
-      difficulty: dif,
-      maxTime: FeiJiang.maxtime,
+  ipcMain.handle(QueryMoveKey, async (_event, { fenStr, difficulty, turn }) => {
+    // 串行化: 等待前一个查询完成再开始本次
+    const result = new Promise<string>((resolve) => {
+      queryLock = queryLock.then(async () => {
+        try {
+          const engine = await FeiJiang.getEngineByTurnAsync(turn);
+          const dif: number | null = difficulty;
+
+          console.log(
+            `Recieve:${fenStr},difficulty ${difficulty},query engine ${engine.name} to get best move`
+          );
+          const info = await engine.infoAndMove(fenStr, {
+            difficulty: dif,
+            maxTime: FeiJiang.maxtime,
+          });
+          if (info && info.bestmove) {
+            console.log('bestmove', info.bestmove);
+            resolve(info.bestmove);
+          } else {
+            console.log('unable to get best move for ', fenStr);
+            resolve('');
+          }
+        } catch (err) {
+          console.error('[QueryMove] Error:', err);
+          resolve('');
+        }
+      });
     });
-    if (info) {
-      console.log('bestmove', info.bestmove);
-      return info.bestmove;
-    } else {
-      console.log('unable to get best move for ', fenStr);
-      return '';
-    }
+    return result;
   });
 
   ipcMain.on(BoardStatusKey, (_evt, status: BoardStatus) => {
