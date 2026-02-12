@@ -151,10 +151,33 @@ export class EngineConfigService {
 
   /**
    * 探测指定 EXE 文件的引擎协议类型.
-   * 启动子进程 → 先发送 uci → 再发送 ucci → 提取 id name.
-   * 总超时 5 秒.
+   * 
+   * 探测策略:
+   * 1. 启动引擎，通过 stdin 发送 'uci' 命令，等待 2 秒
+   * 2. 如果收到 'uciok' → UCI 协议
+   * 3. 如果超时，发送 'ucci' 命令，等待 2 秒
+   * 4. 如果收到 'ucciok' → UCCI 协议
+   * 5. 否则报错
    */
   async probeEngine(exePath: string): Promise<EngineProbeResult> {
+    // 所有引擎都通过 stdin 探测，不使用 CLI args
+    const stdinResult = await this.probeEngineStdin(exePath);
+    if (stdinResult.success) {
+      return stdinResult;
+    }
+
+    // 探测失败
+    return {
+      success: false,
+      protocol: null,
+      error: '协议检测失败: 引擎未响应 uci 或 ucci 命令',
+    };
+  }
+
+  /**
+   * 通过 stdin 探测引擎协议
+   */
+  private probeEngineStdin(exePath: string): Promise<EngineProbeResult> {
     return new Promise((resolve) => {
       let proc: ChildProcessWithoutNullStreams;
       let buffer = '';
@@ -163,7 +186,7 @@ export class EngineConfigService {
       let engineName: string | undefined;
 
       const cleanup = () => {
-        if (!proc.killed) {
+        if (proc && !proc.killed) {
           proc.kill();
         }
       };
@@ -218,7 +241,7 @@ export class EngineConfigService {
         }
       });
 
-      // Phase 1: Send 'uci', wait 3s
+      // Phase 1: Send 'uci', wait 2s
       proc.stdin.write('uci\n');
 
       const uciTimeout = setTimeout(() => {
@@ -229,28 +252,16 @@ export class EngineConfigService {
         proc.stdin.write('ucci\n');
 
         // Phase 2: Wait 2s for UCCI response
-        const ucciTimeout = setTimeout(() => {
+        setTimeout(() => {
           finish({
             success: false,
             protocol: null,
-            error: '协议检测超时: 引擎未响应 uci 或 ucci 命令',
+            error: 'stdin 模式超时',
           });
         }, 2000);
-
-        // If resolved in cleanup, clear this timeout
-        proc.on('close', () => clearTimeout(ucciTimeout));
-      }, 3000);
+      }, 2000);
 
       proc.on('close', () => clearTimeout(uciTimeout));
-
-      // Overall safety timeout: 6s
-      setTimeout(() => {
-        finish({
-          success: false,
-          protocol: null,
-          error: '协议检测超时',
-        });
-      }, 6000);
     });
   }
 

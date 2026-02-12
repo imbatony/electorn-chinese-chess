@@ -25,6 +25,8 @@ export interface EngineConfig {
   thread?: number;
   /** 哈希表大小 (MB), 默认 128 */
   hashSize?: number;
+  /** @deprecated 不再使用，保留用于兼容旧配置文件 */
+  useCliArgs?: boolean;
 }
 
 /** 配置文件整体结构, 对应 engines.json 的序列化格式 */

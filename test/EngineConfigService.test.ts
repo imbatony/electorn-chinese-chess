@@ -376,7 +376,8 @@ describe('EngineConfigService', () => {
       const result = await service.probeEngine('C:\\nonexistent.exe');
       expect(result.success).toBe(false);
       expect(result.protocol).toBeNull();
-      expect(result.error).toContain('无法启动引擎');
+      // 由于 probeEngine 会尝试 stdin 和 CLI 两种方式，最终返回通用错误消息
+      expect(result.error).toContain('协议检测失败');
     });
   });
 });

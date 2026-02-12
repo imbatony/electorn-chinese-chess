@@ -42,7 +42,10 @@ async function createEngine(key: string): Promise<ChessEngine> {
     config.name,
     config.protocol,
     FeiJiangInstance.engineThreadCount,
-    config.hashSize
+    config.hashSize,
+    1, // minDiff default
+    3, // maxDiff default
+    config.useCliArgs ?? false
   );
   await engine.initEngine();
   engines.set(key, engine);

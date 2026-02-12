@@ -148,7 +148,8 @@ export class ChessEngine {
     thread: number = DEFAULT_THREAD_COUNT,
     hashSize: number = DEFAULT_HASH_SIZE,
     minDiff = 1,
-    maxDiff = 3
+    maxDiff = 3,
+    _useCliArgs = false // 保留参数以保持 API 兼容性，但不再使用
   ) {
     this.UCCI_ENGINE_LOCATION = UCCI_ENGINE_LOCATION;
     this.name = name;
@@ -170,6 +171,7 @@ export class ChessEngine {
   public async initEngine(): Promise<string> {
     console.log('init engine ', this.name);
     this.resultBuffer = '';
+    // 所有引擎都通过 stdin 发送协议命令来初始化
     const engineInfo = await this.sendAsync(this.type.toLocaleLowerCase());
     const lines = engineInfo.split('\n');
     lines.forEach((l) => {
@@ -231,6 +233,8 @@ export class ChessEngine {
   }
   private init() {
     // console.log("In init ...", this.UCCI_ENGINE_LOCATION);
+    // 所有引擎（UCI 和 UCCI）都通过标准输入接收命令
+    // 不使用 CLI 参数，因为某些引擎（如 Pikafish）使用 CLI 参数 uci 时会在输出后立即退出
     this.posProc = spawn(this.UCCI_ENGINE_LOCATION, []);
 
     // this.posProc.stdout.once("data", (data: any) => {
@@ -269,7 +273,6 @@ export class ChessEngine {
         case this.resultBuffer.indexOf(NO_BEST_MOVE) !== -1:
           console.log('receive nobestmove stop');
           this.IN_GO_WAITING = false;
-          this.resultBuffer += textChunk;
           this.callback(null, this.resultBuffer);
           this.resultBuffer = ''; // 清空缓存
           break;
@@ -278,7 +281,6 @@ export class ChessEngine {
         case this.resultBuffer.indexOf(BEST_MOVE) !== -1:
           console.log('receive bestmove stop');
           this.IN_GO_WAITING = false;
-          this.resultBuffer += textChunk;
           console.log('[out:bestmove]:', this.resultBuffer);
           this.callback(null, this.resultBuffer);
           this.resultBuffer = ''; // 清空缓存
@@ -291,7 +293,6 @@ export class ChessEngine {
             this.resultBuffer.lastIndexOf('uciok') > this.resultBuffer.lastIndexOf('option')):
           console.log('receive ok stop');
           this.IN_GO_WAITING = false;
-          this.resultBuffer += textChunk;
           console.log('[out:ok]:', this.resultBuffer);
           this.callback(null, this.resultBuffer);
           this.resultBuffer = ''; // 清空缓存
@@ -300,14 +301,22 @@ export class ChessEngine {
         case this.resultBuffer.indexOf('bye') !== -1:
           console.log('receive bye stop');
           this.IN_GO_WAITING = false;
-          this.resultBuffer += textChunk;
+          this.callback(null, this.resultBuffer);
+          this.resultBuffer = ''; // 清空缓存
+          break;
+
+        // 如果含readyok，则为 isready 命令的响应
+        case this.resultBuffer.indexOf('readyok') !== -1:
+          console.log('receive readyok stop');
+          this.IN_GO_WAITING = false;
+          console.log('[out:readyok]:', this.resultBuffer);
           this.callback(null, this.resultBuffer);
           this.resultBuffer = ''; // 清空缓存
           break;
 
         // 如果含INFO，则将信息buffer后继续，不callback，继续接
         case this.resultBuffer.indexOf(INFO) !== -1:
-          this.resultBuffer += textChunk;
+          // 继续缓存，不callback
           break;
 
         default:
@@ -318,10 +327,8 @@ export class ChessEngine {
               // then callback is null. Might cause error.
               this.callback(null, textChunk);
             }
-          } else {
-            // 还是INFO的等待返回中，必须继续等
-            this.resultBuffer += textChunk;
           }
+          // else: 还是INFO的等待返回中，必须继续等，不做任何操作
           break;
       }
     });
@@ -346,6 +353,7 @@ export class ChessEngine {
         this.IN_GO_WAITING = true;
         break;
       case command.indexOf(IS_READY) !== -1:
+        this.IN_GO_WAITING = true;
         break;
       case command.indexOf(GO) !== -1:
         this.IN_GO_WAITING = true;
@@ -386,10 +394,8 @@ export class ChessEngine {
     if (this.type === UCI) {
       await this.sendAsync('ucinewgame');
     }
-    let position = `position fen ${fen}`;
-    if (this.type === UCI) {
-      position = `fen ${fen}`;
-    }
+    // UCI 和 UCCI 的 position 命令格式相同
+    const position = `position fen ${fen}`;
     await this.sendAsync(position);
     let time = maxTime;
     if (difficulty) {
@@ -471,10 +477,8 @@ export class ChessEngine {
     this.analysisOnInfo = onInfo;
     this.analysisPvList = [];
 
-    let position = `position fen ${fen}`;
-    if (this.type === UCI) {
-      position = `fen ${fen}`;
-    }
+    // UCI 和 UCCI 的 position 命令格式相同
+    const position = `position fen ${fen}`;
     await this.sendAsync(position);
 
     // Register a temporary stdout handler for analysis
