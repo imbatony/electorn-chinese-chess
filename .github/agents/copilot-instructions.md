@@ -1,29 +1,24 @@
-# electorn-chinese-chess Development Guidelines
+# electorn-chinese-chess 开发指南
 
-Auto-generated from all feature plans. Last updated: 2026-02-10
+基于所有功能计划自动生成. 最后更新时间: 2026-02-12
 
-## Active Technologies
+## 活跃技术
 
-- TypeScript 4.x + Electron 17.x, React 17.x, react-konva, @electron/remote, lodash (001-game-record-save-load)
 
-## Project Structure
-
-```text
+## 项目结构
+```
 src/
 tests/
 ```
 
-## Commands
+## 命令
+# Add commands for 
 
-npm test; npm run lint
+## 代码风格
+General: Follow standard conventions
 
-## Code Style
+## 最近变更
 
-TypeScript 4.x: Follow standard conventions
 
-## Recent Changes
-
-- 001-game-record-save-load: Added TypeScript 4.x + Electron 17.x, React 17.x, react-konva, @electron/remote, lodash
-
-<!-- MANUAL ADDITIONS START -->
-<!-- MANUAL ADDITIONS END -->
+<!-- 手动添加内容开始 -->
+<!-- 手动添加内容结束 -->
