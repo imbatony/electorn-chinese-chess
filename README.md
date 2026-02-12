@@ -1,8 +1,8 @@
 # 飞将象棋
-[![Build Release](https://github.com/imbatony/electorn-chinese-chess/actions/workflows/release.yml/badge.svg?branch=v0.0.14)](https://github.com/imbatony/electorn-chinese-chess/actions/workflows/release.yml)
+[![Build Release](https://github.com/imbatony/electorn-chinese-chess/actions/workflows/release.yml/badge.svg?branch=v0.0.16)](https://github.com/imbatony/electorn-chinese-chess/actions/workflows/release.yml)
 [![chatroom icon](https://patrolavia.github.io/telegram-badge/chat.png)](https://t.me/fjchess)
 
-`飞将象棋`是一款基于`Electorn`开发的开源象棋软件，目前内置四款引擎（`象眼(ElephantEye)`，`旋风(cyclone)`，`佳佳(gg)`，`南奥(sachess)`）。目前由于引擎限制，只能运行在Windows平台。
+`飞将象棋`是一款基于`Electorn`开发的开源象棋软件，目前内置四款引擎（`象眼(ElephantEye)`，`旋风(cyclone)`，`佳佳(gg)`，`南奥(sachess)`），同时支持添加自定义UCI/UCCI引擎（如`Pikafish`）。目前由于引擎限制，只能运行在Windows平台。
 
 - [飞将象棋](#飞将象棋)
   - [游戏截图](#游戏截图)
@@ -58,17 +58,18 @@
 | 关闭背景音乐 | 支持 （v0.0.8) |        |
 
 ### 象棋引擎
-| 功能项   | 是否支持(版本)  | 待开发 |
-| -------- | --------------- | ------ |
-| UCI引擎  | 支持 （v0.0.12) |        |
-| UUCI引擎 | 支持 （v0.0.6)  |        |
-| 引擎设置 | 不支持        | 是     |
-| 引擎选择 | 支持 （v0.0.12) |        |
-| 多引擎   | 支持 （v0.0.12) |        |
-| 设置开局库   | 不支持         | 是     |
-| 自定义开局库 | 不支持         | 是     |
-| 设置残局库   | 不支持         | 是     |
-| 自定义残局库 | 不支持         | 是     |
+| 功能项       | 是否支持(版本)  | 待开发 |
+| ------------ | --------------- | ------ |
+| UCI引擎      | 支持 （v0.0.12) |        |
+| UCCI引擎     | 支持 （v0.0.6)  |        |
+| 自定义引擎   | 支持 （v0.0.16) |        |
+| 引擎配置管理 | 支持 （v0.0.16) |        |
+| 引擎选择     | 支持 （v0.0.12) |        |
+| 多引擎       | 支持 （v0.0.12) |        |
+| 设置开局库   | 不支持          | 是     |
+| 自定义开局库 | 不支持          | 是     |
+| 设置残局库   | 不支持          | 是     |
+| 自定义残局库 | 不支持          | 是     |
 
 ### 辅助功能
 
@@ -96,7 +97,32 @@
 
 棋谱文件默认保存在 `%APPDATA%/飞将象棋/save/` 目录。
 
+### 自定义引擎 (v0.0.16 新增)
+
+飞将象棋支持添加自定义 UCI/UCCI 引擎：
+
+- **添加引擎**: 通过菜单添加本地引擎可执行文件（.exe）
+- **自动检测**: 自动检测引擎协议类型（UCI 或 UCCI）
+- **引擎配置**: 支持配置线程数和哈希表大小
+- **默认引擎**: 可设置任意引擎为默认引擎
+- **推荐引擎**: [Pikafish](https://github.com/official-pikafish/Pikafish) - 开源高性能中国象棋引擎
+
+引擎配置文件保存在 `%APPDATA%/飞将象棋/engines.json`。
+
 ## 版本更新说明
+
+### v0.0.16
+- 新增自定义引擎支持，可添加 Pikafish 等第三方 UCI/UCCI 引擎
+- 新增引擎配置管理功能（添加、删除、设置默认引擎）
+- 修复 UCI 引擎初始化问题，确保 `readyok` 响应正确处理
+- 修复 UCI 引擎 position 命令格式问题
+- 引擎配置持久化存储在 `%APPDATA%/飞将象棋/engines.json`
+
+### v0.0.15
+- 新增棋谱保存与加载功能
+- 新增 PGN 格式导出
+- 新增棋谱回放功能
+- 新增自动保存与崩溃恢复
 
 ### v0.0.14
 - 修复关于菜单显示的问题
