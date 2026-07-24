@@ -141,42 +141,54 @@ body {
 
 /* CSS */
 .button-41 {
-  background-color: initial;
-  /* background-image: linear-gradient(-180deg, #00d775, #00bd68); */
-  background-image: url("../../assets/img/bg2.jpg");
-  border-radius: 5px;
-  box-shadow: rgba(0, 0, 0, 0.1) 0 2px 4px;
-  color: #111;
+  width: 88px;
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid rgba(105, 57, 19, 0.85);
+  border-radius: 6px;
+  background: linear-gradient(180deg, #f2d49d 0%, #c9914c 100%);
+  box-shadow:
+    inset 0 1px rgba(255, 246, 213, 0.65),
+    0 2px 4px rgba(45, 22, 6, 0.35);
+  color: #3c210e;
   cursor: pointer;
-  display: inline-block;
-  font-family: Inter, -apple-system, system-ui, Roboto, "Helvetica Neue", Arial,
+  font-family: "Microsoft YaHei", -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
-  height: 20px;
-  line-height: 20px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 30px;
   outline: 0;
   overflow: hidden;
-  padding: 0 20px;
-  pointer-events: auto;
-  position: relative;
   text-align: center;
   touch-action: manipulation;
+  transition:
+    background 120ms ease,
+    box-shadow 120ms ease,
+    transform 120ms ease;
   user-select: none;
   -webkit-user-select: none;
-  vertical-align: top;
   white-space: nowrap;
-  width: 100%;
-  z-index: 9;
-  border: 0;
-  width: 100px;
-  opacity: 1;
 }
 
 .button-41:not([disabled]):hover {
-  background: #00bd68;
+  background: linear-gradient(180deg, #ffe6ad 0%, #dda454 100%);
+  box-shadow:
+    inset 0 1px rgba(255, 250, 225, 0.8),
+    0 3px 6px rgba(45, 22, 6, 0.45);
+  transform: translateY(-1px);
 }
-.button-41[disabled]{
-  background-color: darkgray;
-  background-image: none;
+
+.button-41:not([disabled]):active {
+  box-shadow: inset 0 2px 4px rgba(67, 33, 8, 0.35);
+  transform: translateY(0);
+}
+
+.button-41[disabled] {
+  border-color: rgba(91, 68, 48, 0.45);
+  background: linear-gradient(180deg, #b7aa92 0%, #8e806c 100%);
+  box-shadow: none;
+  color: rgba(53, 42, 32, 0.65);
+  cursor: not-allowed;
 }
 
 /* CSS */
@@ -210,16 +222,24 @@ body {
   box-shadow: 0 0 .25rem rgba(0, 0, 0, 0.5), -.125rem -.125rem 1rem rgba(239, 71, 101, 0.5), .125rem .125rem 1rem rgba(255, 154, 90, 0.5);
 }
 .command-line {
-  height: 70px;
+  height: 60px;
+  box-sizing: border-box;
   width: 100%;
-  background-color:  rgba(0, 0, 0, 0.4);
+  border-top: 1px solid rgba(218, 166, 85, 0.5);
+  background: linear-gradient(
+    180deg,
+    rgba(63, 35, 16, 0.68) 0%,
+    rgba(31, 17, 9, 0.82) 100%
+  );
+  box-shadow: inset 0 1px rgba(255, 225, 165, 0.08);
   display: flex;
-  vertical-align: middle;
+  align-items: center;
   justify-content: center;
-  gap: 24px;
+  gap: 14px;
 }
-.command-line div{
-  padding-top: 15px;
+
+.command-line div {
+  padding-top: 0;
 }
 
 /* PlaybackBar styles */
@@ -231,21 +251,28 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  gap: 6px;
   padding-top: 0;
 }
 
 .playback-bar .playback-button {
-  width: 40px;
-  height: 28px;
+  width: 36px;
+  height: 30px;
   padding: 0;
+  line-height: 28px;
   font-size: 14px;
 }
 
 .playback-bar .playback-position {
-  color: #fff;
+  box-sizing: border-box;
+  min-width: 68px;
+  height: 30px;
+  border: 1px solid rgba(220, 173, 101, 0.35);
+  border-radius: 5px;
+  background: rgba(24, 13, 7, 0.45);
+  color: #f5dfb5;
   font-size: 14px;
-  min-width: 60px;
+  line-height: 28px;
   text-align: center;
 }
 
@@ -253,4 +280,8 @@ body {
   display: flex;
   justify-content: center;
   padding-top: 0;
+}
+
+.playback-bar .playback-actions .button-41 {
+  width: 96px;
 }
