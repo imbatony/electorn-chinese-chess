@@ -3,19 +3,19 @@
  *
  * 运行在 Electron 主进程中，处理所有文件读写操作
  */
+import { BrowserWindow, app, dialog } from 'electron';
 
-import { app, BrowserWindow,dialog } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
 
 import {
   GameRecord,
+  ValidationResult,
   parseGameRecord,
   stringifyGameRecord,
   validateGameRecord,
-  ValidationResult,
 } from '../common/GameRecord';
-import { ExportResponse,LoadResponse, SaveResponse } from '../common/IPCInfos';
+import { ExportResponse, LoadResponse, SaveResponse } from '../common/IPCInfos';
 
 // ============================================================================
 // Constants
@@ -39,7 +39,7 @@ const AUTOSAVE_FILENAME = 'autosave.json';
 
 export class GameRecordService {
   private static instance: GameRecordService;
-  
+
   private userDataPath: string;
   private savePath: string;
   private autoSavePath: string;
@@ -99,17 +99,23 @@ export class GameRecordService {
    */
   public async save(record: GameRecord, parentWindow?: BrowserWindow): Promise<SaveResponse> {
     try {
+      const validation = validateGameRecord(record);
+      if (!validation.valid) {
+        return { success: false, error: `棋谱格式无效: ${validation.errors.join('; ')}` };
+      }
+
       // 生成默认文件名
       const defaultFilename = this.generateFilename(record);
-      
+
       // 显示保存对话框
-      const result = await dialog.showSaveDialog(parentWindow ?? BrowserWindow.getFocusedWindow()!, {
-        defaultPath: path.join(this.savePath, defaultFilename),
-        filters: [
-          { name: '棋谱文件', extensions: ['json'] },
-        ],
-        title: '保存棋谱',
-      });
+      const result = await dialog.showSaveDialog(
+        parentWindow ?? BrowserWindow.getFocusedWindow()!,
+        {
+          defaultPath: path.join(this.savePath, defaultFilename),
+          filters: [{ name: '棋谱文件', extensions: ['json'] }],
+          title: '保存棋谱',
+        }
+      );
 
       if (result.canceled || !result.filePath) {
         return { success: false, error: '用户取消保存' };
@@ -117,7 +123,19 @@ export class GameRecordService {
 
       // 写入文件 (带重试逻辑)
       const content = stringifyGameRecord(record);
-      return await this.writeFileWithRetry(result.filePath, content, parentWindow);
+      const response = await this.writeFileWithRetry(result.filePath, content, parentWindow);
+      if (response.success) {
+        try {
+          this.discardAutoSave();
+        } catch (e) {
+          return {
+            success: false,
+            filePath: response.filePath,
+            error: `棋谱已保存，但清理自动保存失败: ${(e as Error).message}`,
+          };
+        }
+      }
+      return response;
     } catch (e) {
       const error = `保存失败: ${(e as Error).message}`;
       console.error('[GameRecordService]', error);
@@ -151,35 +169,38 @@ export class GameRecordService {
         return { success: true, filePath };
       } catch (e) {
         const err = e as NodeJS.ErrnoException;
-        
+
         // 检查是否是文件被占用的错误
         if ((err.code === 'EBUSY' || err.code === 'EACCES') && attempt < maxRetries) {
           console.warn(`[GameRecordService] File busy, attempt ${attempt}/${maxRetries}`);
-          
+
           // 询问用户是否重试
-          const result = await dialog.showMessageBox(parentWindow ?? BrowserWindow.getFocusedWindow()!, {
-            type: 'warning',
-            buttons: ['重试', '取消'],
-            defaultId: 0,
-            cancelId: 1,
-            title: '文件被占用',
-            message: `文件 "${path.basename(filePath)}" 正被其他程序使用。请关闭该文件后重试。`,
-          });
-          
+          const result = await dialog.showMessageBox(
+            parentWindow ?? BrowserWindow.getFocusedWindow()!,
+            {
+              type: 'warning',
+              buttons: ['重试', '取消'],
+              defaultId: 0,
+              cancelId: 1,
+              title: '文件被占用',
+              message: `文件 "${path.basename(filePath)}" 正被其他程序使用。请关闭该文件后重试。`,
+            }
+          );
+
           if (result.response !== 0) {
             return { success: false, error: '用户取消保存' };
           }
-          
+
           // 等待一小段时间后重试
-          await new Promise(resolve => setTimeout(resolve, 500));
+          await new Promise((resolve) => setTimeout(resolve, 500));
           continue;
         }
-        
+
         // 其他错误或重试次数用尽
         throw e;
       }
     }
-    
+
     return { success: false, error: '保存失败：文件无法写入' };
   }
 
@@ -195,16 +216,15 @@ export class GameRecordService {
   public async load(parentWindow?: BrowserWindow): Promise<LoadResponse> {
     try {
       // 显示打开对话框
-      const result = await dialog.showOpenDialog(parentWindow ?? BrowserWindow.getFocusedWindow()!, {
-        defaultPath: this.savePath,
-        filters: [
-          { name: '棋谱文件', extensions: ['json'] },
-          { name: 'PGN棋谱', extensions: ['pgn'] },
-          { name: '所有文件', extensions: ['*'] },
-        ],
-        title: '加载棋谱',
-        properties: ['openFile'],
-      });
+      const result = await dialog.showOpenDialog(
+        parentWindow ?? BrowserWindow.getFocusedWindow()!,
+        {
+          defaultPath: this.savePath,
+          filters: [{ name: '棋谱文件', extensions: ['json'] }],
+          title: '加载棋谱',
+          properties: ['openFile'],
+        }
+      );
 
       if (result.canceled || result.filePaths.length === 0) {
         return { success: false, error: '用户取消加载' };
@@ -234,12 +254,15 @@ export class GameRecordService {
       // 检查文件大小
       const stats = fs.statSync(filePath);
       if (stats.size > MAX_FILE_SIZE) {
-        return { success: false, error: `文件过大 (${Math.round(stats.size / 1024 / 1024)}MB)，最大支持 10MB` };
+        return {
+          success: false,
+          error: `文件过大 (${Math.round(stats.size / 1024 / 1024)}MB)，最大支持 10MB`,
+        };
       }
 
       // 读取文件内容
       const content = fs.readFileSync(filePath, 'utf-8');
-      
+
       // 解析并验证
       const { record, errors } = parseGameRecord(content);
       if (!record) {
@@ -274,11 +297,16 @@ export class GameRecordService {
    */
   public autoSave(record: GameRecord): void {
     try {
+      const validation = validateGameRecord(record);
+      if (!validation.valid) {
+        throw new Error(`棋谱格式无效: ${validation.errors.join('; ')}`);
+      }
       const content = stringifyGameRecord(record);
       fs.writeFileSync(this.autoSaveFilePath, content, 'utf-8');
       console.log('[GameRecordService] Auto-saved game record');
     } catch (e) {
       console.error('[GameRecordService] Auto-save failed:', (e as Error).message);
+      throw e;
     }
   }
 
@@ -294,7 +322,7 @@ export class GameRecordService {
 
       const stats = fs.statSync(this.autoSaveFilePath);
       const content = fs.readFileSync(this.autoSaveFilePath, 'utf-8');
-      const { record } = parseGameRecord(content);
+      const { record, errors } = parseGameRecord(content);
 
       if (record) {
         return {
@@ -304,10 +332,10 @@ export class GameRecordService {
         };
       }
 
-      return { hasAutoSave: false };
+      throw new Error(`自动保存棋谱格式无效: ${errors.join('; ')}`);
     } catch (e) {
       console.error('[GameRecordService] Check auto-save failed:', (e as Error).message);
-      return { hasAutoSave: false };
+      throw e;
     }
   }
 
@@ -322,6 +350,26 @@ export class GameRecordService {
       }
     } catch (e) {
       console.error('[GameRecordService] Discard auto-save failed:', (e as Error).message);
+      throw e;
+    }
+  }
+
+  /**
+   * 将无法读取的自动保存移出活动位置，保留原始数据供后续排查或恢复。
+   */
+  public quarantineAutoSave(now: Date = new Date()): string {
+    try {
+      if (!fs.existsSync(this.autoSaveFilePath)) {
+        throw new Error('自动保存文件不存在');
+      }
+      const timestamp = now.toISOString().replace(/[:.]/g, '-');
+      const quarantinePath = path.join(this.autoSavePath, `autosave.corrupt.${timestamp}.json`);
+      fs.renameSync(this.autoSaveFilePath, quarantinePath);
+      console.log('[GameRecordService] Quarantined corrupt auto-save file:', quarantinePath);
+      return quarantinePath;
+    } catch (e) {
+      console.error('[GameRecordService] Quarantine auto-save failed:', (e as Error).message);
+      throw e;
     }
   }
 
@@ -336,19 +384,29 @@ export class GameRecordService {
    * @param parentWindow 父窗口 (用于对话框)
    * @returns 导出结果
    */
-  public async export(record: GameRecord, pgnContent: string, parentWindow?: BrowserWindow): Promise<ExportResponse> {
+  public async export(
+    record: GameRecord,
+    pgnContent: string,
+    parentWindow?: BrowserWindow
+  ): Promise<ExportResponse> {
     try {
+      const validation = validateGameRecord(record);
+      if (!validation.valid) {
+        return { success: false, error: `棋谱格式无效: ${validation.errors.join('; ')}` };
+      }
+
       // 生成默认文件名
       const defaultFilename = this.generateFilename(record).replace('.json', '.pgn');
-      
+
       // 显示保存对话框
-      const result = await dialog.showSaveDialog(parentWindow ?? BrowserWindow.getFocusedWindow()!, {
-        defaultPath: path.join(this.savePath, defaultFilename),
-        filters: [
-          { name: 'PGN 棋谱', extensions: ['pgn'] },
-        ],
-        title: '导出 PGN 棋谱',
-      });
+      const result = await dialog.showSaveDialog(
+        parentWindow ?? BrowserWindow.getFocusedWindow()!,
+        {
+          defaultPath: path.join(this.savePath, defaultFilename),
+          filters: [{ name: 'PGN 棋谱', extensions: ['pgn'] }],
+          title: '导出 PGN 棋谱',
+        }
+      );
 
       if (result.canceled || !result.filePath) {
         return { success: false, error: '用户取消导出' };

@@ -2,14 +2,20 @@ import { useCallback, useMemo, useState } from 'react';
 
 import { FEN } from '../../common/Fen';
 import { DEFAULT_INITIAL_FEN, GameRecord } from '../../common/GameRecord';
-import { ICCSToPoints } from '../../common/ICCS';
+import {
+  HistoryMutation,
+  continueHistory,
+  loadHistory,
+  restartHistory,
+  snapshotHistory,
+} from '../gameHistory';
 import { Position } from '../types';
 
 export function usePosition(x: number, y: number): [Position, (x: number, y: number) => void] {
   const [position, setPosition] = useState<Position>({ x: x, y: y });
-  const setPoint = function (x: number, y: number) {
+  const setPoint = useCallback((x: number, y: number) => {
     setPosition({ x: x, y: y });
-  };
+  }, []);
   return [position, setPoint];
 }
 
@@ -45,6 +51,8 @@ export interface UseFENResult {
   continueFromPosition: () => void;
   /** 设置回放模式 */
   setPlaybackMode: (mode: boolean) => void;
+  historyRevision: number;
+  lastMutation: HistoryMutation;
 }
 
 export function useFEN(fenParam?: string): UseFENResult {
@@ -56,6 +64,7 @@ export function useFEN(fenParam?: string): UseFENResult {
   const [initialFen, setInitialFen] = useState(fenParam || DEFAULT_INITIAL_FEN);
   // 使用 ref 来跟踪数组长度变化，用于触发 moveCount 重新计算
   const [arrayVersion, setArrayVersion] = useState(0);
+  const [lastMutation, setLastMutation] = useState<HistoryMutation>(null);
 
   const fen = useMemo(() => {
     console.log('compute fen, index=', index);
@@ -86,60 +95,56 @@ export function useFEN(fenParam?: string): UseFENResult {
       // 截断之后的历史（如果有的话）
       fenArray.length = index + 2;
       setIndex(index + 1);
-      setArrayVersion(v => v + 1);
+      setLastMutation('move');
+      setArrayVersion((v) => v + 1);
     },
     [index, fen, isPlaybackMode]
   );
 
   const back = useCallback(() => {
     if (canback) {
-      console.log('back to', index - 2);
-      setIndex(index - 2);
+      const targetIndex = index - 2;
+      console.log('back to', targetIndex);
+      fenArray.length = targetIndex + 1;
+      setIndex(targetIndex);
+      setLastMutation('undo');
+      setArrayVersion((v) => v + 1);
     }
   }, [index, canback]);
 
   const restart = useCallback(() => {
-    if (index > 0) {
-      console.log('back to', 0);
-      setIndex(0);
-      setPlaybackModeState(false);
-    }
-  }, [index]);
+    const next = restartHistory(initialFen);
+    fenArray.splice(0, fenArray.length, ...next.fenArray);
+    setInitialFen(next.initialFen);
+    setIndex(next.index);
+    setPlaybackModeState(next.isPlaybackMode);
+    setLastMutation('restart');
+    setArrayVersion((v) => v + 1);
+  }, [initialFen]);
 
   const getFenArray = useCallback(() => {
-    return fenArray.slice(0, index + 1);
-  }, [index, arrayVersion]);
+    return snapshotHistory(fenArray);
+  }, [arrayVersion]);
 
   const loadFromRecord = useCallback((record: GameRecord) => {
     console.log('Loading game record with', record.moves.length, 'moves');
-    
-    // 重建 FEN 数组
-    const initFen = new FEN(record.initialFen);
-    
-    // 清空并重建 fenArray
-    fenArray.length = 0;
-    fenArray.push(initFen);
-    
-    let currentFen = initFen;
-    for (const move of record.moves) {
-      // 使用 ICCSToPoints 正确解析 ICCS 着法
-      const [fromCol, fromRow, toCol, toRow] = ICCSToPoints(move.iccs);
-      
-      currentFen = FEN.UpdateFen(currentFen, fromCol, fromRow, toCol, toRow);
-      fenArray.push(currentFen);
-    }
-    
-    setInitialFen(record.initialFen);
-    setIndex(record.currentIndex);
-    setPlaybackModeState(true);
-    setArrayVersion(v => v + 1);
+    const next = loadHistory(record);
+    fenArray.splice(0, fenArray.length, ...next.fenArray);
+    setInitialFen(next.initialFen);
+    setIndex(next.index);
+    setPlaybackModeState(next.isPlaybackMode);
+    setLastMutation('load');
+    setArrayVersion((v) => v + 1);
   }, []);
 
-  const goToMove = useCallback((targetIndex: number) => {
-    if (targetIndex >= 0 && targetIndex < fenArray.length) {
-      setIndex(targetIndex);
-    }
-  }, [arrayVersion]);
+  const goToMove = useCallback(
+    (targetIndex: number) => {
+      if (targetIndex >= 0 && targetIndex < fenArray.length) {
+        setIndex(targetIndex);
+      }
+    },
+    [arrayVersion]
+  );
 
   const goForward = useCallback(() => {
     if (index < fenArray.length - 1) {
@@ -162,11 +167,12 @@ export function useFEN(fenParam?: string): UseFENResult {
   }, [arrayVersion]);
 
   const continueFromPosition = useCallback(() => {
-    // 截断当前位置之后的历史
-    fenArray.length = index + 1;
-    setPlaybackModeState(false);
-    setArrayVersion(v => v + 1);
-  }, [index]);
+    const next = continueHistory({ fenArray, index, initialFen, isPlaybackMode });
+    fenArray.splice(0, fenArray.length, ...next.fenArray);
+    setPlaybackModeState(next.isPlaybackMode);
+    setLastMutation('continue');
+    setArrayVersion((v) => v + 1);
+  }, [index, initialFen, isPlaybackMode]);
 
   const setPlaybackMode = useCallback((mode: boolean) => {
     setPlaybackModeState(mode);
@@ -191,5 +197,7 @@ export function useFEN(fenParam?: string): UseFENResult {
     goToEnd,
     continueFromPosition,
     setPlaybackMode,
+    historyRevision: arrayVersion,
+    lastMutation,
   };
 }

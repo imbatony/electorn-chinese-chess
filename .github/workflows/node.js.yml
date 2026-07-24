@@ -1,37 +1,68 @@
-# This workflow will do a clean installation of node dependencies, cache/restore them, build the source code and run tests across different versions of node
-# For more information see: https://help.github.com/actions/language-and-framework-guides/using-nodejs-with-github-actions
-
 name: Node.js CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
     paths:
-      - "src/**"
-      - "test/**"
-      - "assets/**"
-      - "forge.config.js"
-      - "tsconfig.**"
-      - "webpack.**"
-      - "package.json"
+      - 'src/**'
+      - 'test/**'
+      - 'assets/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.npmrc'
+      - '.github/workflows/**'
+      - 'jest.config.*'
+      - '.eslintrc*'
+      - '.prettier*'
+      - 'knip.json'
+      - 'forge.config.*'
+      - 'webpack.*'
+      - 'tsconfig.*'
   pull_request:
-    branches: [ main ]
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'test/**'
+      - 'assets/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.npmrc'
+      - '.github/workflows/**'
+      - 'jest.config.*'
+      - '.eslintrc*'
+      - '.prettier*'
+      - 'knip.json'
+      - 'forge.config.*'
+      - 'webpack.*'
+      - 'tsconfig.*'
+
+permissions:
+  contents: read
 
 jobs:
   build:
     runs-on: windows-latest
-    strategy:
-      matrix:
-        node-version: [22.x]
-        # See supported Node.js release schedule at https://nodejs.org/en/about/releases/
 
     steps:
-    - uses: actions/checkout@v4
-    - name: Use Node.js ${{ matrix.node-version }}
-      uses: actions/setup-node@v4
-      with:
-        node-version: ${{ matrix.node-version }}
-        cache: 'npm'
-    - run: npm install
-    - run: npm run package
-    - run: npm test
+      - uses: actions/checkout@v4
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Check formatting
+        run: npm run format:check
+      - name: Lint
+        run: npm run lint -- --max-warnings=0
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Check unused code
+        run: npm run knip
+      - name: Test
+        run: npm test -- --runInBand --detectOpenHandles
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --registry=https://registry.npmjs.org
+      - name: Package
+        run: npm run package

@@ -1,10 +1,14 @@
-import { app, BrowserWindow, dialog, globalShortcut } from 'electron';
+import { BrowserWindow, app, dialog, globalShortcut } from 'electron';
+import squirrelStartup from 'electron-squirrel-startup';
+
 import path from 'path';
 
-import { AutoSaveCheckKey } from '../common/IPCInfos';
+import { AutoSaveRecoveryOfferedKey } from '../common/IPCInfos';
+
 import { EngineConfigService } from './EngineConfigService';
-import FeiJiang from './feijiang';
 import { gameRecordService } from './GameRecordService';
+import { resolveCorruptAutoSave } from './corruptAutoSave';
+import FeiJiang from './feijiang';
 import { InitIPC } from './ipc';
 import { refreshMenu } from './menu';
 
@@ -14,6 +18,7 @@ const env = process.env.NODE_ENV;
 // plugin that tells the Electron app where to look for the Webpack-bundled app code (depending on
 // whether you're running in development or production).
 declare const MAIN_WINDOW_WEBPACK_ENTRY: string;
+declare const MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY: string;
 
 let package_json_dir = '';
 if (process.env.NODE_ENV === 'development' || !process.resourcesPath) {
@@ -25,8 +30,7 @@ if (process.env.NODE_ENV === 'development' || !process.resourcesPath) {
 }
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
-if (require('electron-squirrel-startup')) {
-  // eslint-disable-line global-require
+if (squirrelStartup) {
   FeiJiang.clearEngine().finally(() => {
     app.quit();
   });
@@ -41,15 +45,13 @@ const createWindow = (): void => {
     resizable: false,
     autoHideMenuBar: false,
     webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
+      preload: MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY,
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: true,
     },
   });
   FeiJiang.mainWin = mainWindow;
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  require('@electron/remote/main').initialize();
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  require('@electron/remote/main').enable(mainWindow.webContents);
   // and load the index.html of the app.
   mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);
   // 在开发环境和生产环境均可通过快捷键打开devTools
@@ -76,7 +78,35 @@ app.on('ready', () => {
 
   // 检查自动保存恢复
   mainWindow.webContents.on('did-finish-load', async () => {
-    const autoSaveResult = gameRecordService.checkAutoSave();
+    let autoSaveResult;
+    try {
+      autoSaveResult = gameRecordService.checkAutoSave();
+    } catch (error) {
+      const result = await dialog.showMessageBox(mainWindow, {
+        type: 'warning',
+        buttons: ['隔离损坏文件', '保留文件并继续'],
+        defaultId: 0,
+        cancelId: 1,
+        title: '自动保存无法读取',
+        message: '自动保存文件可能已损坏或写入不完整，无法恢复。',
+        detail: `${
+          error instanceof Error ? error.message : String(error)
+        }\n\n选择“隔离损坏文件”会保留原文件副本，并避免下次启动再次提示。`,
+      });
+      const decision = resolveCorruptAutoSave(result.response === 0 ? 'quarantine' : 'keep', () =>
+        gameRecordService.quarantineAutoSave()
+      );
+      if (!decision.proceed) {
+        await dialog.showMessageBox(mainWindow, {
+          type: 'error',
+          buttons: ['确定'],
+          title: '隔离自动保存失败',
+          message: '损坏的自动保存文件仍保留在原位置。',
+          detail: decision.quarantine?.error,
+        });
+      }
+      return;
+    }
     if (autoSaveResult.hasAutoSave && autoSaveResult.record) {
       const timestamp = autoSaveResult.timestamp
         ? new Date(autoSaveResult.timestamp).toLocaleString()
@@ -93,10 +123,18 @@ app.on('ready', () => {
 
       if (result.response === 0) {
         // 恢复对局
-        mainWindow.webContents.send(AutoSaveCheckKey, autoSaveResult);
+        mainWindow.webContents.send(AutoSaveRecoveryOfferedKey, autoSaveResult);
       } else {
-        // 丢弃自动保存
-        gameRecordService.discardAutoSave();
+        try {
+          gameRecordService.discardAutoSave();
+        } catch (error) {
+          await dialog.showMessageBox(mainWindow, {
+            type: 'error',
+            buttons: ['确定'],
+            title: '自动保存清理失败',
+            message: error instanceof Error ? error.message : String(error),
+          });
+        }
       }
     }
   });
@@ -119,7 +157,41 @@ app.on('before-quit', async (event) => {
   if (isQuitting) return;
 
   // 如果有自动保存文件，说明有未保存的对局
-  const autoSaveResult = gameRecordService.checkAutoSave();
+  let autoSaveResult;
+  try {
+    autoSaveResult = gameRecordService.checkAutoSave();
+  } catch (error) {
+    event.preventDefault();
+    const result = await dialog.showMessageBox(mainWindow, {
+      type: 'warning',
+      buttons: ['隔离文件并退出', '取消退出'],
+      defaultId: 1,
+      cancelId: 1,
+      title: '自动保存无法读取',
+      message: '自动保存文件可能已损坏或写入不完整。',
+      detail: `${
+        error instanceof Error ? error.message : String(error)
+      }\n\n退出前可将损坏文件隔离保存；不会静默删除数据。`,
+    });
+    const decision = resolveCorruptAutoSave(result.response === 0 ? 'quarantine' : 'cancel', () =>
+      gameRecordService.quarantineAutoSave()
+    );
+    if (result.response === 0) {
+      if (decision.proceed) {
+        isQuitting = true;
+        app.quit();
+      } else {
+        await dialog.showMessageBox(mainWindow, {
+          type: 'error',
+          buttons: ['确定'],
+          title: '隔离自动保存失败',
+          message: '无法安全处理损坏的自动保存，应用将保持打开。',
+          detail: decision.quarantine?.error,
+        });
+      }
+    }
+    return;
+  }
   if (autoSaveResult.hasAutoSave && mainWindow && !mainWindow.isDestroyed()) {
     event.preventDefault();
 
@@ -134,9 +206,18 @@ app.on('before-quit', async (event) => {
 
     if (result.response === 0) {
       // 放弃对局，清理自动保存
-      gameRecordService.discardAutoSave();
-      isQuitting = true;
-      app.quit();
+      try {
+        gameRecordService.discardAutoSave();
+        isQuitting = true;
+        app.quit();
+      } catch (error) {
+        await dialog.showMessageBox(mainWindow, {
+          type: 'error',
+          buttons: ['确定'],
+          title: '自动保存清理失败',
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
     }
   }
 });

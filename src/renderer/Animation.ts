@@ -40,14 +40,29 @@ export const ChessMoving2 = (
   tx: number,
   ty: number,
   callback?: () => void
-): void => {
-  shape.to({
+): { cancel: () => void } => {
+  let finished = false;
+  const tween = new Konva.Tween({
+    node: shape,
     x: tx,
     y: ty,
     scaleX: 1.2,
     scaleY: 1.2,
     duration: 0.5,
     easing: Konva.Easings.EaseInOut,
-    onFinish: callback,
+    onFinish: () => {
+      finished = true;
+      tween.destroy();
+      callback?.();
+    },
   });
+  tween.play();
+  return {
+    cancel: () => {
+      if (!finished) {
+        tween.pause();
+        tween.destroy();
+      }
+    },
+  };
 };

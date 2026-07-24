@@ -2,16 +2,16 @@ import * as React from 'react';
 import { Image, Layer } from 'react-konva';
 
 import {
-  chessSize,
   DotImage,
   DotImageOffsetX,
   DotImageOffsetY,
   RedBoxImage,
+  WaypointImage,
+  chessSize,
   spaceX,
   spaceY,
   startX,
   startY,
-  WaypointImage,
   waySpaceX,
   waySpaceY,
 } from '../Images';

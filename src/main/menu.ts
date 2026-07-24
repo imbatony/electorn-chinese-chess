@@ -1,12 +1,12 @@
 // In this file you can include the rest of your app's specific main process
 // code. You can also put them in separate files and import them here.
 import {
-  clipboard,
-  dialog,
   Menu,
   MenuItem,
   MenuItemConstructorOptions,
   Notification,
+  clipboard,
+  dialog,
 } from 'electron';
 
 import {
@@ -20,8 +20,9 @@ import {
   OP_TOGGLE_BGM,
   OP_UPDATE_SIDE,
 } from '../common/IPCInfos';
-import { openAboutWindow } from './about';
+
 import { EngineConfigService } from './EngineConfigService';
+import { openAboutWindow } from './about';
 import FeiJiang from './feijiang';
 import {
   getBgmMenuLabel,
@@ -49,7 +50,7 @@ function setPlayerSide(side: 'red' | 'black', playerId: string): void {
   FeiJiang.mainWin?.webContents.send(OP_UPDATE_SIDE, sides);
 }
 
-export function GetTemplate() {
+function GetTemplate() {
   const boardMenuState = getBoardMenuState(FeiJiang.boardStaus);
   const template: Array<MenuItemConstructorOptions | MenuItem> = [
     {

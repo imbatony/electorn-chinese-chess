@@ -105,7 +105,7 @@ export interface InfoAndMove {
   /** 搜索过程中所有 info 行的解析结果, 按 depth 递增 */
   pvList: Info[];
   /** 引擎推荐的最佳走法 (ICCS 格式) */
-  bestmove: string;
+  bestmove: string | null;
   /** 引擎推荐对手应走 (ICCS 格式) */
   ponder?: string;
   /** 总搜索节点数 (从最后一行 info 提取) */

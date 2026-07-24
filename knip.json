@@ -2,13 +2,12 @@
   "$schema": "https://unpkg.com/knip@latest/schema.json",
   "entry": [
     "src/main/index.ts",
+    "src/preload/main.ts",
+    "src/preload/about.ts",
     "src/renderer/index.ts",
     "src/renderer/about.ts"
   ],
   "project": ["src/**/*.{ts,tsx}"],
-  "ignore": [
-    "src/custom.d.ts"
-  ],
   "ignoreDependencies": [
     "@electron-forge/*",
     "@vercel/webpack-asset-relocator-loader",

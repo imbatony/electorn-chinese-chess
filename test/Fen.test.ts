@@ -39,6 +39,21 @@ test("Test Fen", () => {
   expect(PieceArray[array[9][8] - 1].GetName()).toBe("车");
 });
 
+test("invalid FEN remains invalid and safe to inspect", () => {
+  const fen = new FEN("not-a-fen");
+  expect(fen.isValid()).toBe(false);
+  expect(fen.getFen()).toBe("not-a-fen");
+  expect(fen.getChessArray()).toHaveLength(10);
+  expect(() => FEN.UpdateFen(fen, 0, 0, 0, 1)).toThrow("invalid FEN");
+});
+
+test("coordinate conversion and FEN updates reject unsafe coordinates", () => {
+  const fen = new FEN();
+  expect(() => FEN.UpdateFen(fen, -1, 0, 0, 0)).toThrow(RangeError);
+  expect(() => FEN.UpdateFen(fen, 0, 0, 9, 0)).toThrow(RangeError);
+  expect(() => FEN.UpdateFen(fen, 0, 1, 0, 2)).toThrow("empty square");
+});
+
 test("Test UpdateFen", () => {
   const oldfen = new FEN();
   //帅五进一

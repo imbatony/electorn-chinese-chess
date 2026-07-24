@@ -1,27 +1,70 @@
 import * as React from 'react';
-import { render } from 'react-dom';
-import { HashRouter, Route, Routes } from 'react-router-dom';
+import { createRoot } from 'react-dom/client';
+import { HashRouter, Route, Routes, useNavigate } from 'react-router-dom';
 
-import { OP_UPDATE_SIDE } from '../common/IPCInfos';
+import { GameRecord } from '../common/GameRecord';
+
 import Board from './Board';
-import { ChessContext, defaultChessState } from './context';
-import { PlaySide } from './types';
 import Welcome from './Welcome';
+import {
+  ChessContext,
+  defaultChessState,
+  subscribeAutoSaveRecovery,
+  subscribeGameRecordLoad,
+} from './context';
+import { PlaySide } from './types';
 
 let onChangeSide: (prev: PlaySide, cur: PlaySide) => void;
-const { ipcRenderer } = window.require('electron');
+
+const AppRoutes = () => {
+  const navigate = useNavigate();
+  const [pendingRecord, setPendingRecord] = React.useState<{
+    record: GameRecord;
+    disposition: 'clean' | 'recovery';
+  }>();
+
+  React.useEffect(() => {
+    const openBoard = (record: GameRecord, disposition: 'clean' | 'recovery') => {
+      setPendingRecord({ record, disposition });
+      navigate('/board/true');
+    };
+    const unsubscribeRecovery = subscribeAutoSaveRecovery((record) => {
+      openBoard(record, 'recovery');
+    });
+    const unsubscribeLoad = subscribeGameRecordLoad((record) => {
+      openBoard(record, 'clean');
+    });
+    return () => {
+      unsubscribeRecovery();
+      unsubscribeLoad();
+    };
+  }, [navigate]);
+
+  return (
+    <Routes>
+      <Route path="/" element={<Welcome />} />
+      <Route
+        path="/board/:rotation"
+        element={
+          <Board
+            pendingRecord={pendingRecord}
+            onRecordApplied={() => setPendingRecord(undefined)}
+          />
+        }
+      />
+    </Routes>
+  );
+};
+
 const App = () => {
   const [sides, setSides] = React.useState<PlaySide>({ red: 'human', black: 'human' });
   const previousSides = React.useRef(sides);
 
   React.useEffect(() => {
-    const handleSideUpdate = (_evt: unknown, nextSides: PlaySide) => {
+    const handleSideUpdate = (nextSides: PlaySide) => {
       setSides(nextSides);
     };
-    ipcRenderer.on(OP_UPDATE_SIDE, handleSideUpdate);
-    return () => {
-      ipcRenderer.removeListener(OP_UPDATE_SIDE, handleSideUpdate);
-    };
+    return window.chessApi.onSidesUpdated(handleSideUpdate);
   }, []);
 
   React.useEffect(() => {
@@ -30,7 +73,7 @@ const App = () => {
       onChangeSide?.(previous, sides);
       previousSides.current = sides;
     }
-    ipcRenderer.send(OP_UPDATE_SIDE, sides);
+    window.chessApi.updateSides(sides);
   }, [sides]);
 
   const setPlayerSides = (nextSides: PlaySide) => {
@@ -51,13 +94,14 @@ const App = () => {
         }}
       >
         <HashRouter>
-          <Routes>
-            <Route path="/" element={<Welcome />} />
-            <Route path="/board/:rotation" element={<Board />} />
-          </Routes>
+          <AppRoutes />
         </HashRouter>
       </ChessContext.Provider>
     </>
   );
 };
-render(<App />, document.getElementById('root'));
+const rootElement = document.getElementById('root');
+if (!rootElement) {
+  throw new Error('找不到应用根节点');
+}
+createRoot(rootElement).render(<App />);

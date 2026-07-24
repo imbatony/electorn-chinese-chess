@@ -4,40 +4,22 @@ import { createContext } from 'react';
 
 import { GameRecord } from '../common/GameRecord';
 import {
-  APPEXITKey,
-  AutoSaveCheckKey,
-  AutoSaveCheckResponse,
-  AutoSaveRequest,
-  AutoSaveWriteKey,
-  BgmKey,
+  AutoSaveResponse,
   BoardStatus,
-  BoardStatusKey,
-  ExportExecuteKey,
-  ExportRequest,
   ExportResponse,
-  LoadExecuteKey,
   LoadResponse,
-  OP_BACK,
-  OP_EXPORT,
-  OP_LOAD,
-  OP_RESTART,
-  OP_ROTATION,
-  OP_SAVE,
-  OP_TOGGLE_BGM,
-  QueryMoveKey,
-  SaveExecuteKey,
-  SaveRequest,
+  QueryMoveResponse,
   SaveResponse,
 } from '../common/IPCInfos';
+
 import { playBgm } from './Sound';
+import { createRecoveryBuffer } from './recoveryBuffer';
 import { PlaySide } from './types';
 
-const { ipcRenderer } = window.require('electron');
 let onback: () => void;
 let onRestart: () => void;
 let onRotation: () => void;
 let onSave: () => void;
-let onLoad: (record: GameRecord) => void;
 let onExport: () => void;
 let difficulty = 1;
 let bgmOn = true;
@@ -53,105 +35,83 @@ const setMode = (m: string) => {
 const setBgmType = (type: 'welcome' | 'board') => {
   bgmType = type;
   playBgm(bgmOn, bgmType);
-  ipcRenderer.send(BgmKey, bgmOn, bgmType);
+  window.chessApi.updateBgm({ enabled: bgmOn, type: bgmType });
 };
 const queryMove = (fenStr: string, turn: boolean) => {
   let dif = difficulty;
   if (mode !== 'normal') {
     dif = null;
   }
-  return ipcRenderer.invoke(QueryMoveKey, { fenStr, difficulty: dif, turn });
+  return window.chessApi.queryMove({ fenStr, difficulty: dif, turn });
 };
-ipcRenderer.removeAllListeners(OP_TOGGLE_BGM);
-ipcRenderer.on(OP_TOGGLE_BGM, () => {
+window.chessApi.onToggleBgm(() => {
   setBgmOn(!bgmOn);
   playBgm(bgmOn, bgmType);
-  ipcRenderer.send(BgmKey, bgmOn, bgmType);
+  window.chessApi.updateBgm({ enabled: bgmOn, type: bgmType });
 });
 
-ipcRenderer.removeAllListeners(OP_BACK);
-ipcRenderer.on(OP_BACK, () => {
-  console.log(OP_BACK);
+window.chessApi.onBack(() => {
   onback();
 });
 
-ipcRenderer.removeAllListeners(OP_RESTART);
-ipcRenderer.on(OP_RESTART, () => {
-  console.log(OP_RESTART);
+window.chessApi.onRestart(() => {
   onRestart();
 });
-ipcRenderer.removeAllListeners(OP_ROTATION);
-ipcRenderer.on(OP_ROTATION, () => {
-  console.log(OP_ROTATION);
+window.chessApi.onRotation(() => {
   onRotation();
 });
 
 // 保存棋谱
-ipcRenderer.removeAllListeners(OP_SAVE);
-ipcRenderer.on(OP_SAVE, () => {
-  console.log(OP_SAVE);
+window.chessApi.onSave(() => {
   if (onSave) onSave();
 });
 
 // 加载棋谱
-ipcRenderer.removeAllListeners(OP_LOAD);
-ipcRenderer.on(OP_LOAD, async () => {
-  console.log(OP_LOAD);
-  
+const loadBuffer = createRecoveryBuffer();
+window.chessApi.onLoad(async () => {
   // 检查是否有未保存的进度
-  if (defaultChessState.isDirtyCallback()) {
-    const { dialog } = window.require('@electron/remote');
-    const result = await dialog.showMessageBox({
-      type: 'warning',
-      buttons: ['继续加载', '取消'],
-      defaultId: 1,
-      cancelId: 1,
-      title: '未保存的进度',
-      message: '当前对局尚未保存，加载新棋谱将丢失当前进度。是否继续？',
-    });
-    if (result.response !== 0) {
-      return;
-    }
+  if (defaultChessState.isDirtyCallback() && !(await window.chessApi.confirmLoad())) {
+    return;
   }
-  
-  const response: LoadResponse = await ipcRenderer.invoke(LoadExecuteKey);
-  if (response.success && response.record && onLoad) {
-    onLoad(response.record);
+
+  const response: LoadResponse = await window.chessApi.loadGameRecord();
+  if (response.success && response.record) {
+    loadBuffer.offer(response.record);
   } else if (!response.success && response.error !== '用户取消加载') {
     console.error('[Load] Error:', response.error);
+    alert(`加载失败: ${response.error ?? '未知错误'}`);
   }
 });
 
 // 导出 PGN
-ipcRenderer.removeAllListeners(OP_EXPORT);
-ipcRenderer.on(OP_EXPORT, () => {
-  console.log(OP_EXPORT);
+window.chessApi.onExport(() => {
   if (onExport) onExport();
 });
 
 // 保存执行函数
 const saveGameRecord = async (record: GameRecord): Promise<SaveResponse> => {
-  return ipcRenderer.invoke(SaveExecuteKey, { record } as SaveRequest);
+  return window.chessApi.saveGameRecord(record);
 };
 
 // 导出执行函数
 const exportGameRecord = async (record: GameRecord): Promise<ExportResponse> => {
-  return ipcRenderer.invoke(ExportExecuteKey, { record } as ExportRequest);
+  return window.chessApi.exportGameRecord(record);
 };
 
 // 自动保存函数
-const autoSaveGameRecord = async (record: GameRecord): Promise<void> => {
-  await ipcRenderer.invoke(AutoSaveWriteKey, { record } as AutoSaveRequest);
+const autoSaveGameRecord = async (record: GameRecord): Promise<AutoSaveResponse> => {
+  return window.chessApi.autoSaveGameRecord(record);
 };
 
-// 自动保存恢复回调
-let onAutoSaveRecover: (record: GameRecord) => void;
-ipcRenderer.removeAllListeners(AutoSaveCheckKey);
-ipcRenderer.on(AutoSaveCheckKey, (_evt: unknown, response: AutoSaveCheckResponse) => {
-  if (response.hasAutoSave && response.record && onAutoSaveRecover) {
-    onAutoSaveRecover(response.record);
+const recoveryBuffer = createRecoveryBuffer();
+window.chessApi.onAutoSaveRecover((response) => {
+  if (response.hasAutoSave && response.record) {
+    recoveryBuffer.offer(response.record);
   }
 });
+
+export const subscribeAutoSaveRecovery = recoveryBuffer.subscribe;
+export const subscribeGameRecordLoad = loadBuffer.subscribe;
 
 export const defaultChessState = {
   on: bgmOn,
@@ -161,13 +121,13 @@ export const defaultChessState = {
   mode: mode,
   setMode: setMode,
   updateBoardStatus(boardStatus: BoardStatus | null) {
-    ipcRenderer.send(BoardStatusKey, boardStatus);
+    window.chessApi.updateBoardStatus(boardStatus);
   },
   difficulty: difficulty,
   setDifficulty(diff: number) {
     difficulty = diff;
   },
-  queryMove(fenStr: string, turn: boolean): Promise<string> {
+  queryMove(fenStr: string, turn: boolean): Promise<QueryMoveResponse> {
     return queryMove(fenStr, turn);
   },
   setOnBack(backFunc: () => void) {
@@ -183,18 +143,12 @@ export const defaultChessState = {
   setOnSave(saveFunc: () => void) {
     onSave = saveFunc;
   },
-  setOnLoad(loadFunc: (record: GameRecord) => void) {
-    onLoad = loadFunc;
-  },
   setOnExport(exportFunc: () => void) {
     onExport = exportFunc;
   },
   saveGameRecord,
   exportGameRecord,
   autoSaveGameRecord,
-  setOnAutoSaveRecover(callback: (record: GameRecord) => void) {
-    onAutoSaveRecover = callback;
-  },
   // Dirty 状态检查回调
   isDirtyCallback: (): boolean => false,
   setIsDirtyCallback(callback: () => boolean) {
@@ -204,7 +158,7 @@ export const defaultChessState = {
   blackSide: 'none',
   setSides: (_sides: PlaySide) => {},
   exit() {
-    ipcRenderer.send(APPEXITKey);
+    window.chessApi.exit();
   },
   setChangeSideCallBack: (_sideCallBackFunc: (prev: PlaySide, cur: PlaySide) => void) => {},
 };

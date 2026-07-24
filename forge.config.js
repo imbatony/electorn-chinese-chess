@@ -40,12 +40,18 @@ module.exports = {
                         {
                             "html": "./src/renderer/index.html",
                             "js": "./src/renderer/index.ts",
-                            "name": "main_window"
+                            "name": "main_window",
+                            "preload": {
+                                "js": "./src/preload/main.ts"
+                            }
                         },
                         {
                             "html": "./src/renderer/about.html",
                             "js": "./src/renderer/about.ts",
-                            "name": "about_window"
+                            "name": "about_window",
+                            "preload": {
+                                "js": "./src/preload/about.ts"
+                            }
                         }
                     ]
                 }

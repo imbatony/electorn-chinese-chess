@@ -1,10 +1,7 @@
-import os from "os";
-import path from "path";
+import os from 'os';
+import path from 'path';
 
-import {
-  ChessEngine,
-  parseInfoLine,
-} from "../src/main/UCCI";
+import { ChessEngine, parseInfoLine } from '../src/main/UCCI';
 
 // ========================================================================
 // parseInfoLine 单元测试 (T024)
@@ -12,7 +9,8 @@ import {
 
 describe('parseInfoLine', () => {
   it('should parse standard UCI info line', () => {
-    const line = 'info depth 10 seldepth 15 score cp 35 nodes 12345 nps 67890 time 183 pv e2e4 d7d5 g1f3';
+    const line =
+      'info depth 10 seldepth 15 score cp 35 nodes 12345 nps 67890 time 183 pv e2e4 d7d5 g1f3';
     const result = parseInfoLine(line);
     expect(result).not.toBeNull();
     expect(result!.depth).toBe(10);
@@ -90,7 +88,7 @@ describe('parseInfoLine', () => {
   });
 });
 // Integration test: uses actual GG engine binary
-test("Test GG Engine with ChessEngine constructor", async () => {
+test('Test GG Engine with ChessEngine constructor', async () => {
   let basePath = process.resourcesPath;
   if (process.env.NODE_ENV === 'development' || !process.resourcesPath) {
     basePath = path.join(process.cwd(), 'assets');
@@ -98,15 +96,16 @@ test("Test GG Engine with ChessEngine constructor", async () => {
   const ggFilePath = path.join(basePath, 'engine/gg20180531/NewGG.exe');
 
   const engine = new ChessEngine(ggFilePath, '佳佳', 'uci', os.cpus().length);
-  const init = await engine.initEngine();
-  console.log(init);
-  const infoAndMove = await engine.infoAndMove(
-    "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR w - - 0 1 moves h2e2",
-    {difficulty:1,maxTime:3000}
-  );
-  expect(infoAndMove).not.toBeNull();
-  expect(infoAndMove!.bestmove).not.toBeNull();
-  // Verify pvList is now populated (fix from T027)
-  expect(infoAndMove!.pvList.length).toBeGreaterThan(0);
-  await engine.quit();
-});
+  try {
+    const init = await engine.initEngine();
+    console.log(init);
+    const infoAndMove = await engine.infoAndMove(
+      'rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR w - - 0 1 moves h2e2',
+      { difficulty: 1, maxTime: 3000 }
+    );
+    expect(infoAndMove.bestmove).not.toBeNull();
+    expect(infoAndMove.pvList.length).toBeGreaterThan(0);
+  } finally {
+    await engine.quit();
+  }
+}, 15000);

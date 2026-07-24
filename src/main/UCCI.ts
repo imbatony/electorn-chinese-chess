@@ -1,35 +1,55 @@
 import { ChildProcessWithoutNullStreams, spawn } from 'child_process';
 
-import { Info as NewInfo, InfoAndMove as NewInfoAndMove, OnInfoCallback } from './engine-types';
+import { Info, InfoAndMove, OnInfoCallback } from './engine-types';
 
-const INFO = 'info';
-const NO_BEST_MOVE = 'nobestmove';
-const BEST_MOVE = 'bestmove';
 const UCCI = 'ucci';
 const UCI = 'uci';
-const IS_READY = 'isready';
-const GO = 'go';
-const STOP = 'stop';
-const RESTART_COMMAND = 'restart-ucci';
-const QUIT = 'quit';
+const DEFAULT_HASH_SIZE = 128;
+const DEFAULT_THREAD_COUNT = 4;
+
+export interface QueryMoveOption {
+  difficulty: number | null;
+  maxTime: number;
+}
+
+export interface EngineTimeouts {
+  initialization: number;
+  command: number;
+  searchGrace: number;
+  stop: number;
+}
+
+type ResponseKind = 'protocol' | 'ready' | 'bestmove';
+
+interface CurrentCommand {
+  command: string;
+  expected: ResponseKind;
+  output: string[];
+  resolve: (value: string) => void;
+  reject: (reason: Error) => void;
+  timeout: ReturnType<typeof setTimeout> | null;
+  scheduledStop: ReturnType<typeof setTimeout> | null;
+  stopTimer: ReturnType<typeof setTimeout> | null;
+  timedOut: boolean;
+  onInfo?: OnInfoCallback;
+}
+
+const DEFAULT_TIMEOUTS: EngineTimeouts = {
+  initialization: 5000,
+  command: 3000,
+  searchGrace: 500,
+  stop: 2000,
+};
 
 /**
- * info 行解析纯函数.
- * 使用关键字驱动的线性扫描, 支持所有 UCI/UCCI info 字段.
- *
- * @param line 原始 info 行 (含 'info' 前缀)
- * @returns 解析后的 Info 对象, 无法解析则返回 null
+ * 解析 UCI/UCCI info 行。
  */
-export function parseInfoLine(line: string): NewInfo | null {
-  if (!line || !line.trimStart().startsWith('info')) {
-    return null;
-  }
+export function parseInfoLine(line: string): Info | null {
+  if (!line || !line.trimStart().startsWith('info')) return null;
 
   const tokens = line.trim().split(/\s+/);
-  // Skip the 'info' token
-  let i = tokens.indexOf('info');
-  if (i === -1) return null;
-  i++;
+  let i = tokens.indexOf('info') + 1;
+  if (i === 0) return null;
 
   let depth: number | undefined;
   let seldepth: number | undefined;
@@ -42,32 +62,19 @@ export function parseInfoLine(line: string): NewInfo | null {
   let pv: string[] | undefined;
 
   while (i < tokens.length) {
-    const token = tokens[i];
-
-    switch (token) {
+    switch (tokens[i]) {
       case 'depth':
         depth = parseInt(tokens[++i], 10);
         break;
       case 'seldepth':
         seldepth = parseInt(tokens[++i], 10);
         break;
-      case 'score': {
-        const next = tokens[i + 1];
-        if (next === 'cp') {
-          scoreType = 'cp';
-          i++;
-          score = parseInt(tokens[++i], 10);
-        } else if (next === 'mate') {
-          scoreType = 'mate';
-          i++;
-          score = parseInt(tokens[++i], 10);
-        } else {
-          // UCCI style: score is directly a centipawn value
-          scoreType = 'cp';
-          score = parseInt(tokens[++i], 10);
+      case 'score':
+        if (tokens[i + 1] === 'cp' || tokens[i + 1] === 'mate') {
+          scoreType = tokens[++i] as 'cp' | 'mate';
         }
+        score = parseInt(tokens[++i], 10);
         break;
-      }
       case 'nodes':
         nodes = parseInt(tokens[++i], 10);
         break;
@@ -81,470 +88,510 @@ export function parseInfoLine(line: string): NewInfo | null {
         multipv = parseInt(tokens[++i], 10);
         break;
       case 'pv':
-        // All remaining tokens are moves
         pv = tokens.slice(i + 1);
-        i = tokens.length; // Exit loop
-        break;
-      default:
-        // Unknown token (e.g., 'string', 'currmove', etc.), skip
+        i = tokens.length;
         break;
     }
     i++;
   }
 
-  // Must have at least depth to be a valid info line
-  if (depth === undefined) {
-    return null;
-  }
-
-  const result: NewInfo = {
+  if (depth === undefined) return null;
+  return {
     depth,
     score: score ?? 0,
     scoreType,
     pv: pv ?? [],
+    ...(seldepth === undefined ? {} : { seldepth }),
+    ...(nodes === undefined ? {} : { nodes }),
+    ...(nps === undefined ? {} : { nps }),
+    ...(time === undefined ? {} : { time }),
+    ...(multipv === undefined ? {} : { multipv }),
   };
-
-  if (seldepth !== undefined) result.seldepth = seldepth;
-  if (nodes !== undefined) result.nodes = nodes;
-  if (nps !== undefined) result.nps = nps;
-  if (time !== undefined) result.time = time;
-  if (multipv !== undefined) result.multipv = multipv;
-
-  return result;
 }
 
-export type UCCICallback = (err: Error, data: string) => void;
-const DEFAULT_HASH_SIZE = 128;
-const DEFAULT_THREAD_COUNT = 4;
-
-export interface QueryMoveOption {
-  difficulty: number | null;
-  maxTime: number;
+export function parseBestMove(output: string): { bestmove: string | null; ponder?: string } {
+  for (const rawLine of output.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (line === 'nobestmove') return { bestmove: null };
+    if (!line.startsWith('bestmove')) continue;
+    const tokens = line.split(/\s+/);
+    const move = tokens[1];
+    const ponderIndex = tokens.indexOf('ponder');
+    return {
+      bestmove: !move || move === '(none)' || move === '0000' ? null : move,
+      ...(ponderIndex >= 0 && tokens[ponderIndex + 1] ? { ponder: tokens[ponderIndex + 1] } : {}),
+    };
+  }
+  throw new Error('引擎响应中缺少 bestmove');
 }
+
 /**
- * https://www.xqbase.com/protocol/cchess_ucci.htm
+ * 串行 UCI/UCCI 引擎客户端。任一时刻只允许一个有响应的命令在途。
  */
 export class ChessEngine {
-  private callback: UCCICallback;
-  private resultBuffer = '';
   public name: string;
-  private IN_GO_WAITING = false;
-  private release = true;
-  private type: 'ucci' | 'uci' = UCCI;
-  private minDiff = 1;
-  private maxDiff = 5;
-  private thread = DEFAULT_THREAD_COUNT;
-  private hashSize = DEFAULT_HASH_SIZE;
-  private engineDisplayName = '';
-  private hasTreadOption = false;
-  private hasHashSizeOption = false;
 
-  private posProc: ChildProcessWithoutNullStreams;
-  private UCCI_ENGINE_LOCATION: string;
+  private readonly location: string;
+  private readonly type: 'ucci' | 'uci';
+  private readonly thread: number;
+  private readonly hashSize: number;
+  private readonly minDiff: number;
+  private readonly maxDiff: number;
+  private readonly timeouts: EngineTimeouts;
+  private process: ChildProcessWithoutNullStreams | null = null;
+  private current: CurrentCommand | null = null;
+  private stdoutBuffer = '';
+  private ready = false;
+  private closing = false;
+  private initializing = false;
+  private initializedOnce = false;
+  private recovery: Promise<string> | null = null;
+  private engineDisplayName = '';
+  private hasThreadOption = false;
+  private hasHashSizeOption = false;
+  private analysisPromise: Promise<string> | null = null;
+  private analysisPvList: Info[] = [];
+  private operationQueue: Promise<void> = Promise.resolve();
+
   constructor(
-    UCCI_ENGINE_LOCATION: string,
+    location: string,
     name: string,
     type: 'ucci' | 'uci' = UCCI,
     thread: number = DEFAULT_THREAD_COUNT,
     hashSize: number = DEFAULT_HASH_SIZE,
     minDiff = 1,
     maxDiff = 3,
-    _useCliArgs = false // 保留参数以保持 API 兼容性，但不再使用
+    _useCliArgs = false,
+    timeouts: Partial<EngineTimeouts> = {}
   ) {
-    this.UCCI_ENGINE_LOCATION = UCCI_ENGINE_LOCATION;
+    this.location = location;
     this.name = name;
     this.type = type;
-    this.init();
-    this.maxDiff = maxDiff;
-    this.minDiff = minDiff;
     this.thread = thread;
     this.hashSize = hashSize;
+    this.minDiff = minDiff;
+    this.maxDiff = maxDiff;
+    this.timeouts = { ...DEFAULT_TIMEOUTS, ...timeouts };
   }
-  getQueyForTime(time: number) {
-    if (this.type === UCCI) {
-      return `go ponder time ${time} movestogo 1 opptime ${time} oppmovestogo 1`;
-    } else {
-      return `go movetime ${time}`;
-    }
+
+  getQueyForTime(time: number): string {
+    return this.type === UCCI
+      ? `go ponder time ${time} movestogo 1 opptime ${time} oppmovestogo 1`
+      : `go movetime ${time}`;
   }
 
   public async initEngine(): Promise<string> {
-    console.log('init engine ', this.name);
-    this.resultBuffer = '';
-    // 所有引擎都通过 stdin 发送协议命令来初始化
-    const engineInfo = await this.sendAsync(this.type.toLocaleLowerCase());
-    const lines = engineInfo.split('\n');
-    lines.forEach((l) => {
+    if (this.ready) return this.engineDisplayName;
+    if (this.recovery) return this.recovery;
+    this.recovery = this.initializeProcess();
+    void this.recovery.catch((): void => {});
+    try {
+      return await this.recovery;
+    } finally {
+      this.recovery = null;
+    }
+  }
+
+  private async initializeProcess(): Promise<string> {
+    this.initializing = true;
+    this.ready = false;
+    this.closing = false;
+    this.hasThreadOption = false;
+    this.hasHashSizeOption = false;
+    try {
+      this.startProcess();
+      const engineInfo = await this.issueCommand(
+        this.type,
+        'protocol',
+        this.timeouts.initialization
+      );
+      this.readEngineOptions(engineInfo);
+      if (this.hasThreadOption) {
+        await this.writeOnly(
+          this.type === UCCI
+            ? `setoption threads ${this.thread}`
+            : `setoption name Threads value ${this.thread}`
+        );
+      }
+      if (this.hasHashSizeOption) {
+        await this.writeOnly(
+          this.type === UCCI
+            ? `setoption hashsize ${this.hashSize}`
+            : `setoption name Hash value ${this.hashSize}`
+        );
+      }
+      await this.issueCommand('isready', 'ready', this.timeouts.initialization);
+      this.ready = true;
+      this.initializedOnce = true;
+      return engineInfo;
+    } catch (error) {
+      this.disposeProcess();
+      throw error;
+    } finally {
+      this.initializing = false;
+    }
+  }
+
+  private startProcess(): void {
+    let child: ChildProcessWithoutNullStreams;
+    try {
+      child = spawn(this.location, []);
+    } catch (error) {
+      throw new Error(`无法启动引擎: ${this.errorMessage(error)}`);
+    }
+    this.process = child;
+    this.stdoutBuffer = '';
+    child.stdout.on('data', this.onStdout);
+    child.on('error', this.onProcessError);
+    child.on('exit', this.onProcessExit);
+  }
+
+  private readonly onStdout = (data: Buffer): void => {
+    this.stdoutBuffer += data.toString('utf8');
+    const lines = this.stdoutBuffer.split(/\r?\n/);
+    this.stdoutBuffer = lines.pop() ?? '';
+    for (const line of lines) this.handleLine(line.trim());
+  };
+
+  private handleLine(line: string): void {
+    const command = this.current;
+    if (!command || !line) return;
+    command.output.push(line);
+    if (line.startsWith('info')) {
+      const info = parseInfoLine(line);
+      if (info) command.onInfo?.(info);
+    }
+
+    const complete =
+      (command.expected === 'protocol' && line === (this.type === UCCI ? 'ucciok' : 'uciok')) ||
+      (command.expected === 'ready' && line === 'readyok') ||
+      (command.expected === 'bestmove' && (line.startsWith('bestmove') || line === 'nobestmove'));
+    if (!complete) return;
+
+    const output = command.output.join('\n');
+    if (command.timedOut) {
+      this.rejectCurrent(new Error(`引擎搜索超时: ${command.command}`), false);
+    } else {
+      this.resolveCurrent(output);
+    }
+  }
+
+  private readonly onProcessError = (error: Error): void => {
+    this.failProcess(new Error(`引擎进程错误: ${error.message}`));
+  };
+
+  private readonly onProcessExit = (code: number | null, signal: NodeJS.Signals | null): void => {
+    if (this.closing) return;
+    this.failProcess(
+      new Error(
+        `引擎意外退出${code === null ? '' : ` (code ${code})`}${signal ? ` (${signal})` : ''}`
+      )
+    );
+  };
+
+  private failProcess(error: Error): void {
+    this.ready = false;
+    this.rejectCurrent(error, false);
+    this.disposeProcess();
+    if (this.initializedOnce && !this.initializing && !this.closing && !this.recovery) {
+      this.recovery = this.initializeProcess();
+      void this.recovery
+        .catch((): void => {})
+        .finally(() => {
+          this.recovery = null;
+        });
+    }
+  }
+
+  private readEngineOptions(output: string): void {
+    for (const line of output.split(/\r?\n/)) {
+      if (line.startsWith('id name ')) this.engineDisplayName = line.slice(8).trim();
+      if (!line.startsWith('option')) continue;
       if (this.type === UCCI) {
-        if (l.indexOf('id') !== -1) {
-          const block = l.split(' ');
-          if (block[1] === 'name') {
-            this.engineDisplayName = block.slice(2).join(' ');
-          }
-        } else if (l.indexOf('option') !== -1) {
-          if (l.indexOf('threads') !== -1) {
-            this.hasTreadOption = true;
-          } else if (l.indexOf('hashsize') !== -1) {
-            this.hasHashSizeOption = true;
-          }
-        }
+        this.hasThreadOption ||= /\bthreads\b/i.test(line);
+        this.hasHashSizeOption ||= /\bhashsize\b/i.test(line);
       } else {
-        if (l.indexOf('id') !== -1) {
-          const block = l.split(' ');
-          if (block[1] === 'name') {
-            this.engineDisplayName = block.slice(2).join(' ');
+        this.hasThreadOption ||= /\bname\s+Threads\b/.test(line);
+        this.hasHashSizeOption ||= /\bname\s+Hash\b/.test(line);
+      }
+    }
+  }
+
+  private async ensureReady(): Promise<void> {
+    if (!this.ready) await this.initEngine();
+    if (!this.ready) throw new Error('引擎尚未就绪');
+  }
+
+  private issueCommand(
+    command: string,
+    expected: ResponseKind,
+    timeoutMs: number | null,
+    onInfo?: OnInfoCallback,
+    stopAfterMs?: number
+  ): Promise<string> {
+    if (this.current) return Promise.reject(new Error('引擎正忙'));
+    const proc = this.process;
+    if (!proc) return Promise.reject(new Error('引擎进程未启动'));
+
+    this.stdoutBuffer = '';
+    return new Promise<string>((resolve, reject) => {
+      const current: CurrentCommand = {
+        command,
+        expected,
+        output: [],
+        resolve,
+        reject,
+        timeout: null,
+        scheduledStop: null,
+        stopTimer: null,
+        timedOut: false,
+        onInfo,
+      };
+      this.current = current;
+      if (timeoutMs !== null) {
+        current.timeout = setTimeout(() => {
+          if (expected === 'bestmove') {
+            this.timeoutSearch(current);
+          } else {
+            const error = new Error(`引擎命令超时: ${command}`);
+            this.rejectCurrent(error, false);
+            this.failProcess(error);
           }
-        } else if (l.indexOf('option') !== -1) {
-          if (l.indexOf('Threads') !== -1) {
-            this.hasTreadOption = true;
-          } else if (l.indexOf('Hash') !== -1) {
-            this.hasHashSizeOption = true;
-          }
-        }
+        }, timeoutMs);
+      }
+      if (stopAfterMs !== undefined) {
+        current.scheduledStop = setTimeout(() => this.stopSearch(current, false), stopAfterMs);
+      }
+      this.write(command).catch((error) => this.failProcess(error));
+    });
+  }
+
+  private async writeOnly(command: string): Promise<string> {
+    if (this.current) throw new Error('引擎正忙');
+    try {
+      await this.write(command);
+      return '';
+    } catch (error) {
+      this.failProcess(error instanceof Error ? error : new Error(String(error)));
+      throw error;
+    }
+  }
+
+  private write(command: string): Promise<void> {
+    const proc = this.process;
+    if (!proc || proc.stdin.destroyed || !proc.stdin.writable) {
+      return Promise.reject(new Error('引擎标准输入不可写'));
+    }
+    return new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(
+        () => reject(new Error(`写入引擎超时: ${command}`)),
+        this.timeouts.command
+      );
+      try {
+        proc.stdin.write(`${command}\n`, (error) => {
+          clearTimeout(timer);
+          if (error) reject(new Error(`写入引擎失败: ${error.message}`));
+          else resolve();
+        });
+      } catch (error) {
+        clearTimeout(timer);
+        reject(new Error(`写入引擎失败: ${this.errorMessage(error)}`));
       }
     });
-    if (this.hasTreadOption) {
-      let command = `setoption name Threads value ${this.thread}`;
-      if (this.type === UCCI) {
-        command = `setoption threads ${this.thread}`;
-      }
-      // eslint-disable-next-line @typescript-eslint/no-empty-function
-      await this.sendAsync(command);
-    }
-    if (this.hasHashSizeOption) {
-      let command = `setoption name Hash value ${this.hashSize}`;
-      if (this.type === UCCI) {
-        command = `setoption hashsize ${this.hashSize}`;
-      }
-      // eslint-disable-next-line @typescript-eslint/no-empty-function
-      await this.sendAsync(command);
-    }
-    await this.sendAsync('isready');
-    return engineInfo;
-  }
-  private connect(delayed: boolean) {
-    if (!delayed && !this.release) {
-      // console.log("Waiting for 3 seconds ...");
-      setTimeout(this.connect, 1000, true);
-    }
-    //   posProc.stdin.setEncoding = "utf-8";
-    this.release = false;
-    // console.log("UCCI Engine started.");
-  }
-  private init() {
-    // console.log("In init ...", this.UCCI_ENGINE_LOCATION);
-    // 所有引擎（UCI 和 UCCI）都通过标准输入接收命令
-    // 不使用 CLI 参数，因为某些引擎（如 Pikafish）使用 CLI 参数 uci 时会在输出后立即退出
-    this.posProc = spawn(this.UCCI_ENGINE_LOCATION, []);
-
-    // this.posProc.stdout.once("data", (data: any) => {
-    //   const textChunk = data.toString("utf8");
-    //   // console.log("data once received from engine: ", textChunk);
-    // });
-
-    this.posProc.on('exit', (_code) => {
-      // console.log("Closed with code: ", code);
-      // console.log("Restarting");
-      if (!this.release) {
-        this.init(); // Restart ...
-        this.callback(null, 'Restarted ...');
-      }
-    });
-
-    this.posProc.stdout.on('data', (data: any) => {
-      const textChunk = data.toString('utf8');
-      this.resultBuffer += textChunk;
-      // console.log("Buffered message received: ", this.resultBuffer, textChunk);
-      // 普通返回，不知道有多少行，收到即返回；很可能丢东西，即返回长短不确定。
-      // 但不影响总的功能，因为不需要程序处理
-      // INFO 的返回，需要一直等待bestmove...
-
-      // 如果不是整行，则收满整行；否则，是个状态机
-
-      const lastChar = textChunk.substring(textChunk.length - 1);
-
-      if (lastChar !== '\n') {
-        // need buffer this
-        return; // 不callback，继续接
-      }
-
-      switch (true) {
-        // 如果含nobestmove，则为结束
-        case this.resultBuffer.indexOf(NO_BEST_MOVE) !== -1:
-          console.log('receive nobestmove stop');
-          this.IN_GO_WAITING = false;
-          this.callback(null, this.resultBuffer);
-          this.resultBuffer = ''; // 清空缓存
-          break;
-
-        // 如果含bestmove，则为结束
-        case this.resultBuffer.indexOf(BEST_MOVE) !== -1:
-          console.log('receive bestmove stop');
-          this.IN_GO_WAITING = false;
-          console.log('[out:bestmove]:', this.resultBuffer);
-          this.callback(null, this.resultBuffer);
-          this.resultBuffer = ''; // 清空缓存
-          break;
-
-        // 如果含ucciok||uciok，则为结束
-        case this.resultBuffer.indexOf('ucciok') !== -1 ||
-          (this.resultBuffer.indexOf('uciok') !== -1 &&
-            this.resultBuffer.indexOf('option') !== -1 &&
-            this.resultBuffer.lastIndexOf('uciok') > this.resultBuffer.lastIndexOf('option')):
-          console.log('receive ok stop');
-          this.IN_GO_WAITING = false;
-          console.log('[out:ok]:', this.resultBuffer);
-          this.callback(null, this.resultBuffer);
-          this.resultBuffer = ''; // 清空缓存
-          break;
-        // 如果含bye，则为结束
-        case this.resultBuffer.indexOf('bye') !== -1:
-          console.log('receive bye stop');
-          this.IN_GO_WAITING = false;
-          this.callback(null, this.resultBuffer);
-          this.resultBuffer = ''; // 清空缓存
-          break;
-
-        // 如果含readyok，则为 isready 命令的响应
-        case this.resultBuffer.indexOf('readyok') !== -1:
-          console.log('receive readyok stop');
-          this.IN_GO_WAITING = false;
-          console.log('[out:readyok]:', this.resultBuffer);
-          this.callback(null, this.resultBuffer);
-          this.resultBuffer = ''; // 清空缓存
-          break;
-
-        // 如果含INFO，则将信息buffer后继续，不callback，继续接
-        case this.resultBuffer.indexOf(INFO) !== -1:
-          // 继续缓存，不callback
-          break;
-
-        default:
-          if (!this.IN_GO_WAITING) {
-            // 又没有bestmove,又没有info，则是其它指令，直接返回吧。
-            if (this.callback) {
-              // When first startup, if there is console response,
-              // then callback is null. Might cause error.
-              this.callback(null, textChunk);
-            }
-          }
-          // else: 还是INFO的等待返回中，必须继续等，不做任何操作
-          break;
-      }
-    });
-    this.connect(false);
   }
 
-  public send(command: string, callbackFun: (err: Error, data: string) => void) {
-    this.resultBuffer = '';
-    console.log('send command:', command);
-    if (command === RESTART_COMMAND) {
-      this.IN_GO_WAITING = false;
-      callbackFun(null, 'Server might be restared.');
-      return;
-    }
-    this.callback = callbackFun;
-    this.posProc.stdin.write(command + '\n');
-    // console.log('callback is: ', callback)
-
-    switch (true) {
-      case command.indexOf(UCCI) !== -1 ||
-        (command.indexOf(UCI) !== -1 && command.indexOf(`ucinewgame`) === -1):
-        this.IN_GO_WAITING = true;
-        break;
-      case command.indexOf(IS_READY) !== -1:
-        this.IN_GO_WAITING = true;
-        break;
-      case command.indexOf(GO) !== -1:
-        this.IN_GO_WAITING = true;
-        break;
-      case command.indexOf(QUIT) !== -1 && this.type === UCCI:
-        this.IN_GO_WAITING = true;
-        break;
-      case command.indexOf(STOP) !== -1:
-        // This must have an imediate bestmove response, so do not callback now.
-        // console.log("Calculation stops ....");
-        this.IN_GO_WAITING = false;
-        break;
-
-      default:
-        // When command with no resonpse, such as position,
-        // send http response instead, to prevent forever waiting
-        this.callback(null, 'There is no reponse.');
-        break;
-    }
+  private timeoutSearch(command: CurrentCommand): void {
+    if (this.current !== command || command.timedOut) return;
+    this.stopSearch(command, true);
   }
+
+  private stopSearch(command: CurrentCommand, timedOut: boolean): void {
+    if (this.current !== command || command.stopTimer) return;
+    command.timedOut = timedOut;
+    this.clearTimer(command.timeout);
+    this.clearTimer(command.scheduledStop);
+    command.timeout = null;
+    command.scheduledStop = null;
+    this.write('stop')
+      .then(() => {
+        if (this.current !== command || command.stopTimer) return;
+        command.stopTimer = setTimeout(() => {
+          const error = new Error('停止引擎搜索超时');
+          this.rejectCurrent(error, false);
+          this.failProcess(error);
+        }, this.timeouts.stop);
+      })
+      .catch((error) => this.failProcess(error));
+  }
+
+  private resolveCurrent(output: string): void {
+    const command = this.current;
+    if (!command) return;
+    this.current = null;
+    this.clearCommandTimers(command);
+    this.stdoutBuffer = '';
+    command.resolve(output);
+  }
+
+  private rejectCurrent(error: Error, restart: boolean): void {
+    const command = this.current;
+    if (command) {
+      this.current = null;
+      this.clearCommandTimers(command);
+      this.stdoutBuffer = '';
+      command.reject(error);
+    }
+    if (restart) this.failProcess(error);
+  }
+
+  private clearCommandTimers(command: CurrentCommand): void {
+    this.clearTimer(command.timeout);
+    this.clearTimer(command.scheduledStop);
+    this.clearTimer(command.stopTimer);
+    command.timeout = null;
+    command.scheduledStop = null;
+    command.stopTimer = null;
+  }
+
+  private clearTimer(timer: ReturnType<typeof setTimeout> | null): void {
+    if (timer) clearTimeout(timer);
+  }
+
+  private disposeProcess(): void {
+    const proc = this.process;
+    this.process = null;
+    this.stdoutBuffer = '';
+    if (!proc) return;
+    proc.stdout.removeListener('data', this.onStdout);
+    proc.removeListener('error', this.onProcessError);
+    proc.removeListener('exit', this.onProcessExit);
+    if (!proc.killed) proc.kill();
+    proc.unref();
+  }
+
   public async sendAsync(command: string): Promise<string> {
-    return new Promise<string>((resolve) => {
-      this.send(command, (err, data) => {
-        if (!err) {
-          resolve(data);
-        } else {
-          console.warn('error');
-          resolve('');
-        }
-      });
-    });
+    await this.ensureReady();
+    if (command === 'isready') {
+      return this.issueCommand(command, 'ready', this.timeouts.command);
+    }
+    if (command === UCI || command === UCCI) {
+      return this.issueCommand(command, 'protocol', this.timeouts.command);
+    }
+    return this.writeOnly(command);
   }
+
   public async infoAndMove(
     fen: string,
     { difficulty, maxTime }: QueryMoveOption,
     onInfo?: OnInfoCallback
-  ): Promise<NewInfoAndMove | null> {
-    if (this.type === UCI) {
-      await this.sendAsync('ucinewgame');
+  ): Promise<InfoAndMove> {
+    return this.runSerial(() => this.performInfoAndMove(fen, { difficulty, maxTime }, onInfo));
+  }
+
+  private async performInfoAndMove(
+    fen: string,
+    { difficulty, maxTime }: QueryMoveOption,
+    onInfo?: OnInfoCallback
+  ): Promise<InfoAndMove> {
+    await this.ensureReady();
+    if (this.type === UCI) await this.writeOnly('ucinewgame');
+    await this.writeOnly(`position fen ${fen}`);
+
+    let requestedTime = maxTime;
+    if (difficulty !== null) {
+      requestedTime = Math.min(this.maxDiff, Math.max(this.minDiff, difficulty)) * 1500;
     }
-    // UCI 和 UCCI 的 position 命令格式相同
-    const position = `position fen ${fen}`;
-    await this.sendAsync(position);
-    let time = maxTime;
-    if (difficulty) {
-      let dif = difficulty;
-      if (difficulty > this.maxDiff) dif = this.maxDiff;
-      if (difficulty < this.minDiff) dif = this.minDiff;
-      time = dif * 1500;
-    }
+    const searchTime = Math.min(requestedTime, maxTime);
+    const output = await this.issueCommand(
+      this.getQueyForTime(searchTime),
+      'bestmove',
+      searchTime + this.timeouts.searchGrace,
+      onInfo,
+      this.type === UCCI ? searchTime : undefined
+    );
+    return this.buildSearchResult(output);
+  }
 
-    const go = this.getQueyForTime(time);
-    setTimeout(() => {
-      this.posProc.stdin.write('stop' + '\n');
-    }, maxTime);
-    const lines = await this.sendAsync(go);
-
-    const result: NewInfoAndMove = {
-      pvList: [],
-      bestmove: '',
-    };
-    console.log('lines:\n', lines);
-    lines.split('\n').forEach((l) => {
-      const trimmed = l.trim();
-      if (trimmed.startsWith('info')) {
-        const parsed = parseInfoLine(trimmed);
-        if (parsed) {
-          result.pvList.push(parsed);
-          if (onInfo) {
-            onInfo(parsed);
-          }
-        }
-      } else if (trimmed.startsWith('bestmove')) {
-        const tokens = trimmed.split(/\s+/);
-        for (let i = 0; i < tokens.length; i++) {
-          if (tokens[i] === 'bestmove' && i + 1 < tokens.length) {
-            result.bestmove = tokens[i + 1].trim();
-          } else if (tokens[i] === 'ponder' && i + 1 < tokens.length) {
-            result.ponder = tokens[i + 1].trim();
-          }
-        }
-      }
-    });
-
-    // Fill summary fields from last info line
-    if (result.pvList.length > 0) {
-      const lastInfo = result.pvList[result.pvList.length - 1];
-      result.nodes = lastInfo.nodes;
-      result.nps = lastInfo.nps;
-      result.time = lastInfo.time;
-    }
-
+  private runSerial<T>(operation: () => Promise<T>): Promise<T> {
+    const result = this.operationQueue.then(operation, operation);
+    this.operationQueue = result.then(
+      (): void => {},
+      (): void => {}
+    );
     return result;
   }
 
-  public async quit() {
-    if (!this.release) {
-      this.release = true;
-      await this.sendAsync('quit');
-      if (!this.posProc.killed) {
-        const forcekill = this.posProc.kill();
-        console.warn('force kill ', forcekill);
-      }
-      this.posProc.unref();
-    }
+  private buildSearchResult(output: string, pvList?: Info[]): InfoAndMove {
+    const infos =
+      pvList ??
+      output
+        .split(/\r?\n/)
+        .map(parseInfoLine)
+        .filter((info): info is Info => info !== null);
+    const move = parseBestMove(output);
+    const lastInfo = infos[infos.length - 1];
+    return {
+      pvList: infos,
+      bestmove: move.bestmove,
+      ...(move.ponder ? { ponder: move.ponder } : {}),
+      ...(lastInfo?.nodes === undefined ? {} : { nodes: lastInfo.nodes }),
+      ...(lastInfo?.nps === undefined ? {} : { nps: lastInfo.nps }),
+      ...(lastInfo?.time === undefined ? {} : { time: lastInfo.time }),
+    };
   }
 
-  // ========================================================================
-  // 分析模式 (T029)
-  // ========================================================================
-
-  private analysisOnInfo: OnInfoCallback | null = null;
-  private analysisPvList: NewInfo[] = [];
-  private analysisStdoutHandler: ((data: Buffer) => void) | null = null;
-
-  /**
-   * 启动无限分析模式.
-   * 发送 position + go infinite, 通过 onInfo 回调实时推送分析数据.
-   */
   public async analyzePosition(fen: string, onInfo: OnInfoCallback): Promise<void> {
-    this.analysisOnInfo = onInfo;
+    await this.ensureReady();
+    if (this.analysisPromise || this.current) throw new Error('引擎正忙');
+    await this.writeOnly(`position fen ${fen}`);
     this.analysisPvList = [];
-
-    // UCI 和 UCCI 的 position 命令格式相同
-    const position = `position fen ${fen}`;
-    await this.sendAsync(position);
-
-    // Register a temporary stdout handler for analysis
-    this.analysisStdoutHandler = (data: Buffer) => {
-      const text = data.toString('utf8');
-      const lines = text.split('\n');
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (trimmed.startsWith('info')) {
-          const parsed = parseInfoLine(trimmed);
-          if (parsed && this.analysisOnInfo) {
-            this.analysisPvList.push(parsed);
-            this.analysisOnInfo(parsed);
-          }
-        }
-      }
-    };
-    this.posProc.stdout.on('data', this.analysisStdoutHandler);
-
-    // Send go infinite (don't wait for bestmove)
-    this.posProc.stdin.write('go infinite\n');
+    this.analysisPromise = this.issueCommand('go infinite', 'bestmove', null, (info) => {
+      this.analysisPvList.push(info);
+      onInfo(info);
+    });
+    void this.analysisPromise.catch((): void => {});
   }
 
-  /**
-   * 停止当前分析, 发送 stop 命令.
-   * 引擎会返回最终的 bestmove.
-   */
-  public async stopAnalysis(): Promise<NewInfoAndMove> {
-    // Remove analysis handler
-    if (this.analysisStdoutHandler) {
-      this.posProc.stdout.removeListener('data', this.analysisStdoutHandler);
-      this.analysisStdoutHandler = null;
+  public async stopAnalysis(): Promise<InfoAndMove> {
+    const promise = this.analysisPromise;
+    const command = this.current;
+    if (!promise || !command || command.command !== 'go infinite') {
+      throw new Error('当前没有正在进行的分析');
     }
-    this.analysisOnInfo = null;
+    this.clearTimer(command.timeout);
+    command.timeout = null;
+    await this.write('stop');
+    if (this.current === command && !command.stopTimer) {
+      command.stopTimer = setTimeout(() => {
+        const error = new Error('停止引擎分析超时');
+        this.rejectCurrent(error, false);
+        this.failProcess(error);
+      }, this.timeouts.stop);
+    }
+    try {
+      return this.buildSearchResult(await promise, this.analysisPvList);
+    } finally {
+      this.analysisPromise = null;
+      this.analysisPvList = [];
+    }
+  }
 
-    const response = await this.sendAsync('stop');
-    const result: NewInfoAndMove = {
-      pvList: this.analysisPvList,
-      bestmove: '',
-    };
-
-    // Parse bestmove from response
-    const lines = response.split('\n');
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (trimmed.startsWith('bestmove')) {
-        const tokens = trimmed.split(/\s+/);
-        for (let i = 0; i < tokens.length; i++) {
-          if (tokens[i] === 'bestmove' && i + 1 < tokens.length) {
-            result.bestmove = tokens[i + 1].trim();
-          } else if (tokens[i] === 'ponder' && i + 1 < tokens.length) {
-            result.ponder = tokens[i + 1].trim();
-          }
-        }
+  public async quit(): Promise<void> {
+    this.closing = true;
+    this.ready = false;
+    this.rejectCurrent(new Error('引擎已关闭'), false);
+    const proc = this.process;
+    if (proc) {
+      try {
+        await this.write('quit');
+      } catch {
+        // 进程可能已退出。
       }
     }
+    this.disposeProcess();
+  }
 
-    // Fill summary from last info
-    if (result.pvList.length > 0) {
-      const lastInfo = result.pvList[result.pvList.length - 1];
-      result.nodes = lastInfo.nodes;
-      result.nps = lastInfo.nps;
-      result.time = lastInfo.time;
-    }
-
-    this.analysisPvList = [];
-    return result;
+  private errorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
   }
 }
