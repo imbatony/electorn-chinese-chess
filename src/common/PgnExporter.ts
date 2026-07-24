@@ -1,9 +1,7 @@
 /**
  * PgnExporter - PGN 格式导出器
- * 
+ *
  * 将 GameRecord 导出为 PGN (Portable Game Notation) 中国象棋格式
- * 
- * @see specs/001-game-record-save-load/data-model.md
  */
 
 import { GameRecord, GameResult } from './GameRecord';
