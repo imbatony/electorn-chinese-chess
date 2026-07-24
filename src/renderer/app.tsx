@@ -11,31 +11,30 @@ import Welcome from './Welcome';
 let onChangeSide: (prev: PlaySide, cur: PlaySide) => void;
 const { ipcRenderer } = window.require('electron');
 const App = () => {
-  const [redSide, setRedSideState] = React.useState('human');
-  const [blackSide, setBlackSideState] = React.useState('human');
+  const [sides, setSides] = React.useState<PlaySide>({ red: 'human', black: 'human' });
+  const previousSides = React.useRef(sides);
+
   React.useEffect(() => {
-    ipcRenderer.on(OP_UPDATE_SIDE, (_evt: unknown, { red, black }: { red: string; black: string }) => {
-      const prevRideSide = redSide;
-      const prevBlckSide = blackSide;
-      setRedSideState(red);
-      setBlackSideState(black);
-      onChangeSide &&
-        onChangeSide({ red: prevRideSide, black: prevBlckSide }, { red: red, black: black });
-    });
+    const handleSideUpdate = (_evt: unknown, nextSides: PlaySide) => {
+      setSides(nextSides);
+    };
+    ipcRenderer.on(OP_UPDATE_SIDE, handleSideUpdate);
+    return () => {
+      ipcRenderer.removeListener(OP_UPDATE_SIDE, handleSideUpdate);
+    };
   }, []);
-  const setRedSide = (red: string) => {
-    const prevRideSide = redSide;
-    const prevBlckSide = blackSide;
-    setRedSideState(red);
-    onChangeSide &&
-      onChangeSide({ red: prevRideSide, black: prevBlckSide }, { red: red, black: blackSide });
-  };
-  const setBlackSide = (black: string) => {
-    const prevRideSide = redSide;
-    const prevBlckSide = blackSide;
-    setBlackSideState(black);
-    onChangeSide &&
-      onChangeSide({ red: prevRideSide, black: prevBlckSide }, { red: redSide, black: black });
+
+  React.useEffect(() => {
+    const previous = previousSides.current;
+    if (previous.red !== sides.red || previous.black !== sides.black) {
+      onChangeSide?.(previous, sides);
+      previousSides.current = sides;
+    }
+    ipcRenderer.send(OP_UPDATE_SIDE, sides);
+  }, [sides]);
+
+  const setPlayerSides = (nextSides: PlaySide) => {
+    setSides(nextSides);
   };
   const setChangeSideCallBack = (sideCallBackFunc: (prev: PlaySide, cur: PlaySide) => void) => {
     onChangeSide = sideCallBackFunc;
@@ -45,10 +44,9 @@ const App = () => {
       <ChessContext.Provider
         value={{
           ...defaultChessState,
-          redSide,
-          setRedSide,
-          blackSide,
-          setBlackSide,
+          redSide: sides.red,
+          blackSide: sides.black,
+          setSides: setPlayerSides,
           setChangeSideCallBack,
         }}
       >

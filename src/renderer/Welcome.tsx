@@ -11,17 +11,14 @@ const Welcome = () => {
   const [step, setStep] = useState(0);
   const clickPvc = () => {
     setStep(2);
-    chessContext.setRedSide('human');
-    chessContext.setBlackSide(DEFAULT_ENGINE_KEY);
+    chessContext.setSides({ red: 'human', black: DEFAULT_ENGINE_KEY });
   };
   const clickPvp = () => {
-    chessContext.setRedSide('human');
-    chessContext.setBlackSide('human');
+    chessContext.setSides({ red: 'human', black: 'human' });
     navigate('/board/true');
   };
   const clickCvc = () => {
-    chessContext.setRedSide(DEFAULT_ENGINE_KEY);
-    chessContext.setBlackSide(DEFAULT_ENGINE_KEY);
+    chessContext.setSides({ red: DEFAULT_ENGINE_KEY, black: DEFAULT_ENGINE_KEY });
     chessContext.setDifficulty(3);
     navigate('/board/true');
   };
@@ -39,9 +36,8 @@ const Welcome = () => {
           </a>
           <a
             onClick={() => {
-              chessContext.setRedSide('human');
+              chessContext.setSides({ red: 'human', black: 'human' });
               chessContext.setMode('free');
-              chessContext.setBlackSide('human');
               navigate('/board/true');
             }}
           >
@@ -103,8 +99,10 @@ const Welcome = () => {
           </a>
           <a
             onClick={() => {
-              chessContext.setRedSide(chessContext.blackSide);
-              chessContext.setBlackSide(chessContext.redSide);
+              chessContext.setSides({
+                red: chessContext.blackSide,
+                black: chessContext.redSide,
+              });
               navigate('/board/false');
             }}
           >
@@ -117,6 +115,7 @@ const Welcome = () => {
   };
   React.useEffect(() => {
     chessContext.setType('welcome');
+    chessContext.updateBoardStatus(null);
   }, []);
   return (
     <div className="welcome">

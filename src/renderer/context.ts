@@ -2,34 +2,33 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import { createContext } from 'react';
 
+import { GameRecord } from '../common/GameRecord';
 import {
   APPEXITKey,
+  AutoSaveCheckKey,
+  AutoSaveCheckResponse,
+  AutoSaveRequest,
+  AutoSaveWriteKey,
   BgmKey,
   BoardStatus,
   BoardStatusKey,
+  ExportExecuteKey,
+  ExportRequest,
+  ExportResponse,
+  LoadExecuteKey,
+  LoadResponse,
   OP_BACK,
+  OP_EXPORT,
+  OP_LOAD,
   OP_RESTART,
   OP_ROTATION,
-  OP_TOGGLE_BGM,
-  OP_UPDATE_SIDE,
   OP_SAVE,
-  OP_LOAD,
-  OP_EXPORT,
+  OP_TOGGLE_BGM,
   QueryMoveKey,
   SaveExecuteKey,
   SaveRequest,
   SaveResponse,
-  LoadExecuteKey,
-  LoadResponse,
-  ExportExecuteKey,
-  ExportRequest,
-  ExportResponse,
-  AutoSaveWriteKey,
-  AutoSaveRequest,
-  AutoSaveCheckKey,
-  AutoSaveCheckResponse,
 } from '../common/IPCInfos';
-import { GameRecord } from '../common/GameRecord';
 import { playBgm } from './Sound';
 import { PlaySide } from './types';
 
@@ -161,7 +160,7 @@ export const defaultChessState = {
   setBgmOn: setBgmOn,
   mode: mode,
   setMode: setMode,
-  updateBoardStatus(boardStatus: BoardStatus) {
+  updateBoardStatus(boardStatus: BoardStatus | null) {
     ipcRenderer.send(BoardStatusKey, boardStatus);
   },
   difficulty: difficulty,
@@ -202,14 +201,10 @@ export const defaultChessState = {
     this.isDirtyCallback = callback;
   },
   redSide: 'none',
-  setRedSide: (_key: string) => {},
   blackSide: 'none',
-  setBlackSide: (_key: string) => {},
+  setSides: (_sides: PlaySide) => {},
   exit() {
     ipcRenderer.send(APPEXITKey);
-  },
-  syncSide: (obj: { red: string; black: string }) => {
-    ipcRenderer.send(OP_UPDATE_SIDE, obj);
   },
   setChangeSideCallBack: (_sideCallBackFunc: (prev: PlaySide, cur: PlaySide) => void) => {},
 };

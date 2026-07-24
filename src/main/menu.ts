@@ -23,9 +23,34 @@ import {
 import { openAboutWindow } from './about';
 import { EngineConfigService } from './EngineConfigService';
 import FeiJiang from './feijiang';
+import {
+  getBgmMenuLabel,
+  getBoardMenuState,
+  getPlayerMenuLabel,
+  updateSideMenuState,
+} from './menu-state';
 
 const isMac = process.platform === 'darwin';
+
+export function refreshMenu(): void {
+  const mainWindow = FeiJiang.mainWin;
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return;
+  }
+  mainWindow.setMenu(Menu.buildFromTemplate(GetTemplate()));
+}
+
+function setPlayerSide(side: 'red' | 'black', playerId: string): void {
+  const sides = {
+    red: side === 'red' ? playerId : FeiJiang.redSide,
+    black: side === 'black' ? playerId : FeiJiang.blackSide,
+  };
+  updateSideMenuState(FeiJiang, sides, refreshMenu);
+  FeiJiang.mainWin?.webContents.send(OP_UPDATE_SIDE, sides);
+}
+
 export function GetTemplate() {
+  const boardMenuState = getBoardMenuState(FeiJiang.boardStaus);
   const template: Array<MenuItemConstructorOptions | MenuItem> = [
     {
       label: '文件',
@@ -37,7 +62,7 @@ export function GetTemplate() {
           click: () => {
             FeiJiang.mainWin.webContents.send(OP_SAVE);
           },
-          enabled: !!FeiJiang.boardStaus && (FeiJiang.boardStaus.moveCount ?? 0) > 0,
+          enabled: boardMenuState.canSave,
         },
         {
           id: OP_LOAD,
@@ -55,7 +80,7 @@ export function GetTemplate() {
           click: () => {
             FeiJiang.mainWin.webContents.send(OP_EXPORT);
           },
-          enabled: !!FeiJiang.boardStaus && (FeiJiang.boardStaus.moveCount ?? 0) > 0,
+          enabled: boardMenuState.canExport,
         },
         { type: 'separator' },
         isMac ? { role: 'close', label: '退出' } : { role: 'quit', label: '退出' },
@@ -70,7 +95,7 @@ export function GetTemplate() {
           click: () => {
             FeiJiang.mainWin.webContents.send(OP_BACK);
           },
-          enabled: !!FeiJiang.boardStaus && FeiJiang.boardStaus.canBack,
+          enabled: boardMenuState.canBack,
         },
         {
           id: OP_RESTART,
@@ -78,7 +103,7 @@ export function GetTemplate() {
           click: () => {
             FeiJiang.mainWin.webContents.send(OP_RESTART);
           },
-          enabled: !!FeiJiang.boardStaus,
+          enabled: boardMenuState.canRestart,
         },
         {
           id: OP_ROTATION,
@@ -86,11 +111,11 @@ export function GetTemplate() {
           click: () => {
             FeiJiang.mainWin.webContents.send(OP_ROTATION);
           },
-          enabled: !!FeiJiang.boardStaus,
+          enabled: boardMenuState.canRotate,
         },
         {
           id: OP_TOGGLE_BGM,
-          label: FeiJiang.bgm ? '关闭音乐' : '打开音乐',
+          label: getBgmMenuLabel(FeiJiang.bgm),
           click: () => {
             FeiJiang.mainWin.webContents.send(OP_TOGGLE_BGM);
           },
@@ -106,7 +131,7 @@ export function GetTemplate() {
               body: '复制盘面FEN码成功',
             }).show();
           },
-          enabled: !!FeiJiang.boardStaus,
+          enabled: boardMenuState.canCopyFen,
         },
       ],
     },
@@ -117,14 +142,9 @@ export function GetTemplate() {
           label: '红方',
           submenu: [
             {
-              label: FeiJiang.redSide === 'human' ? '象棋爱好者' + '☑️' : '象棋爱好者',
+              label: getPlayerMenuLabel('象棋爱好者', 'human', FeiJiang.redSide),
               click: () => {
-                FeiJiang.redSide = 'human';
-                Menu.setApplicationMenu(Menu.buildFromTemplate(GetTemplate()));
-                FeiJiang.mainWin.webContents.send(OP_UPDATE_SIDE, {
-                  red: FeiJiang.redSide,
-                  black: FeiJiang.blackSide,
-                });
+                setPlayerSide('red', 'human');
               },
             },
             ...EngineConfigService.getInstance()
@@ -132,12 +152,7 @@ export function GetTemplate() {
               .map((e) => {
                 const available = EngineConfigService.getInstance().isEngineAvailable(e);
                 return {
-                  label:
-                    FeiJiang.redSide === e.id
-                      ? e.name + '☑️'
-                      : available
-                        ? e.name
-                        : e.name + ' (不可用)',
+                  label: getPlayerMenuLabel(e.name, e.id, FeiJiang.redSide, available),
                   enabled: available,
                   click: () => {
                     if (!EngineConfigService.getInstance().isEngineAvailable(e)) {
@@ -147,12 +162,7 @@ export function GetTemplate() {
                       }).show();
                       return;
                     }
-                    FeiJiang.redSide = e.id;
-                    Menu.setApplicationMenu(Menu.buildFromTemplate(GetTemplate()));
-                    FeiJiang.mainWin.webContents.send(OP_UPDATE_SIDE, {
-                      red: FeiJiang.redSide,
-                      black: FeiJiang.blackSide,
-                    });
+                    setPlayerSide('red', e.id);
                   },
                 };
               }),
@@ -162,14 +172,9 @@ export function GetTemplate() {
           label: '黑方',
           submenu: [
             {
-              label: FeiJiang.blackSide === 'human' ? '象棋爱好者' + '☑️' : '象棋爱好者',
+              label: getPlayerMenuLabel('象棋爱好者', 'human', FeiJiang.blackSide),
               click: () => {
-                FeiJiang.blackSide = 'human';
-                Menu.setApplicationMenu(Menu.buildFromTemplate(GetTemplate()));
-                FeiJiang.mainWin.webContents.send(OP_UPDATE_SIDE, {
-                  red: FeiJiang.redSide,
-                  black: FeiJiang.blackSide,
-                });
+                setPlayerSide('black', 'human');
               },
             },
             ...EngineConfigService.getInstance()
@@ -177,12 +182,7 @@ export function GetTemplate() {
               .map((e) => {
                 const available = EngineConfigService.getInstance().isEngineAvailable(e);
                 return {
-                  label:
-                    FeiJiang.blackSide === e.id
-                      ? e.name + '☑️'
-                      : available
-                        ? e.name
-                        : e.name + ' (不可用)',
+                  label: getPlayerMenuLabel(e.name, e.id, FeiJiang.blackSide, available),
                   enabled: available,
                   click: () => {
                     if (!EngineConfigService.getInstance().isEngineAvailable(e)) {
@@ -192,12 +192,7 @@ export function GetTemplate() {
                       }).show();
                       return;
                     }
-                    FeiJiang.blackSide = e.id;
-                    Menu.setApplicationMenu(Menu.buildFromTemplate(GetTemplate()));
-                    FeiJiang.mainWin.webContents.send(OP_UPDATE_SIDE, {
-                      red: FeiJiang.redSide,
-                      black: FeiJiang.blackSide,
-                    });
+                    setPlayerSide('black', e.id);
                   },
                 };
               }),
@@ -232,7 +227,7 @@ export function GetTemplate() {
               }
 
               configService.addCustomEngine(exePath, probeResult);
-              Menu.setApplicationMenu(Menu.buildFromTemplate(GetTemplate()));
+              refreshMenu();
               new Notification({
                 title: '加载成功',
                 body: `已添加引擎: ${probeResult.name || exePath}`,
@@ -265,7 +260,7 @@ export function GetTemplate() {
                 return;
               }
               configService.removeCustomEngine(e.id);
-              Menu.setApplicationMenu(Menu.buildFromTemplate(GetTemplate()));
+              refreshMenu();
               new Notification({
                 title: '移除成功',
                 body: `已移除引擎: ${e.name}`,
