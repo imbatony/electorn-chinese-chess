@@ -224,9 +224,7 @@ body {
 
 /* PlaybackBar styles */
 .playback-bar {
-  flex-direction: column;
-  gap: 8px;
-  padding: 8px 0;
+  align-items: center;
 }
 
 .playback-bar .playback-controls {
@@ -234,7 +232,7 @@ body {
   align-items: center;
   justify-content: center;
   gap: 12px;
-  padding-top: 8px;
+  padding-top: 0;
 }
 
 .playback-bar .playback-button {
@@ -254,5 +252,5 @@ body {
 .playback-bar .playback-actions {
   display: flex;
   justify-content: center;
-  padding-top: 4px;
+  padding-top: 0;
 }
