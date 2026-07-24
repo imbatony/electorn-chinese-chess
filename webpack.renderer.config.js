@@ -1,7 +1,9 @@
 /* eslint-disable @typescript-eslint/no-var-requires */
-const rules = require('./webpack.rules');
+const { commonRules } = require('./webpack.rules');
 const plugins = require('./webpack.plugins');
 
+// Renderer and sandboxed preload bundles cannot depend on Node's __dirname.
+const rules = [...commonRules];
 rules.push({
   test: /\.css$/,
   use: [{ loader: 'style-loader' }, { loader: 'css-loader' }],
