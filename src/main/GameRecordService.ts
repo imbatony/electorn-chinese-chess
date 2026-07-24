@@ -1,9 +1,7 @@
 /**
  * GameRecordService - 棋谱文件 I/O 服务
- * 
+ *
  * 运行在 Electron 主进程中，处理所有文件读写操作
- * 
- * @see specs/001-game-record-save-load/research.md
  */
 
 import { app, dialog, BrowserWindow } from 'electron';

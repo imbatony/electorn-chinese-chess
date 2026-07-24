@@ -1,7 +1,5 @@
 /**
  * GameRecord - 棋谱保存与加载数据模型
- * 
- * @see specs/001-game-record-save-load/data-model.md
  */
 
 import { FEN } from './Fen';
