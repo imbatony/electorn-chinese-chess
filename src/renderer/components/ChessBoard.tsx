@@ -63,6 +63,7 @@ export const ChessBoard = React.memo(({ rotation, fen, positionRevision }: Chess
   const [opSelect, setOpSelect] = usePosition(-1, -1);
   const chessRef = useRef<Konva.Image>(null);
   const opChessRef = useRef<Konva.Image>(null);
+  const selectionAnimationPending = useRef(false);
   const [pendingEngineMove, setPendingEngineMove] = useState<PendingEngineMove | null>(null);
   const engineMoveInFlight = useRef<number>();
   const nextEngineMoveId = useRef(0);
@@ -97,6 +98,16 @@ export const ChessBoard = React.memo(({ rotation, fen, positionRevision }: Chess
       );
     }
   }, [select, selected]);
+
+  useLayoutEffect(() => {
+    if (!selectionAnimationPending.current) {
+      return;
+    }
+    selectionAnimationPending.current = false;
+    if (chessRef.current) {
+      ChessSelected(chessRef.current);
+    }
+  });
 
   const onMove = useCallback(
     (move: string) => {
@@ -300,16 +311,14 @@ export const ChessBoard = React.memo(({ rotation, fen, positionRevision }: Chess
         });
         return;
       }
-      setSelect(x, y);
-      if (chessRef.current) {
-        ChessSelected(chessRef.current);
-      }
       if (board[y][x] > 0) {
         const c = PieceArray[board[y][x] - 1];
         if (c.IsRed() === turn) {
+          selectionAnimationPending.current = true;
           selectSound.play();
         }
       }
+      setSelect(x, y);
     },
     [selected, availableMovement, select, actionable, fen, rotation, setSelect, turn, board]
   );
