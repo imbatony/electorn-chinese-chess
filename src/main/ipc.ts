@@ -1,4 +1,4 @@
-import { app, ipcMain,Menu } from 'electron';
+import { app, ipcMain } from 'electron';
 
 import {
   APPEXITKey as AppExitKey,
@@ -22,7 +22,12 @@ import {
 import { PgnExporter } from '../common/PgnExporter';
 import FeiJiang from './feijiang';
 import { gameRecordService } from './GameRecordService';
-import { GetTemplate } from './menu';
+import { refreshMenu } from './menu';
+import {
+  updateBgmMenuState,
+  updateBoardMenuState,
+  updateSideMenuState,
+} from './menu-state';
 
 export function InitIPC() {
   ipcMain.on(AppExitKey, (_evt, _arg): void => {
@@ -62,21 +67,18 @@ export function InitIPC() {
     return result;
   });
 
-  ipcMain.on(BoardStatusKey, (_evt, status: BoardStatus) => {
-    FeiJiang.boardStaus = status;
+  ipcMain.on(BoardStatusKey, (_evt, status: BoardStatus | null) => {
     console.log(status);
-    FeiJiang.mainWin.setMenu(Menu.buildFromTemplate(GetTemplate()));
+    updateBoardMenuState(FeiJiang, status, refreshMenu);
   });
 
   ipcMain.on(BgmKey, (_evt, bgm: boolean, _type: string) => {
     console.log(bgm);
-    FeiJiang.mainWin.setMenu(Menu.buildFromTemplate(GetTemplate()));
+    updateBgmMenuState(FeiJiang, bgm, refreshMenu);
   });
 
-  ipcMain.on(OP_UPDATE_SIDE, (evt, obj: { red: string; black: string }) => {
-    FeiJiang.redSide = obj.red;
-    FeiJiang.blackSide = obj.black;
-    FeiJiang.mainWin.setMenu(Menu.buildFromTemplate(GetTemplate()));
+  ipcMain.on(OP_UPDATE_SIDE, (_evt, obj: { red: string; black: string }) => {
+    updateSideMenuState(FeiJiang, obj, refreshMenu);
   });
 
   // ============================================================================

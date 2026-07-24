@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, globalShortcut,Menu } from 'electron';
+import { app, BrowserWindow, dialog, globalShortcut } from 'electron';
 import path from 'path';
 
 import { AutoSaveCheckKey } from '../common/IPCInfos';
@@ -6,7 +6,7 @@ import { EngineConfigService } from './EngineConfigService';
 import FeiJiang from './feijiang';
 import { gameRecordService } from './GameRecordService';
 import { InitIPC } from './ipc';
-import { GetTemplate } from './menu';
+import { refreshMenu } from './menu';
 
 const env = process.env.NODE_ENV;
 
@@ -61,8 +61,7 @@ const createWindow = (): void => {
   if (env !== 'production') {
     mainWindow.webContents.openDevTools({ mode: 'detach' });
   }
-  const menu = Menu.buildFromTemplate(GetTemplate());
-  mainWindow.setMenu(menu);
+  refreshMenu();
 };
 
 // This method will be called when Electron has finished

@@ -1,14 +1,13 @@
-import fs from 'fs';
-import path from 'path';
-import { ChildProcessWithoutNullStreams, spawn } from 'child_process';
+import { spawn } from 'child_process';
 import { EventEmitter } from 'events';
-import { Readable, Writable } from 'stream';
+import fs from 'fs';
 
-// Mock electron app before importing the service
-const mockGetPath = jest.fn().mockReturnValue('/mock/userData');
+import type { EngineConfigFile } from '../src/main/engine-types';
+import { EngineConfigService } from '../src/main/EngineConfigService';
+
 jest.mock('electron', () => ({
   app: {
-    getPath: mockGetPath,
+    getPath: jest.fn().mockReturnValue('/mock/userData'),
   },
 }));
 
@@ -18,10 +17,6 @@ jest.mock('child_process');
 
 const mockedFs = jest.mocked(fs);
 const mockedSpawn = jest.mocked(spawn);
-
-// Import after mocks
-import { EngineConfigService } from '../src/main/EngineConfigService';
-import { EngineConfigFile } from '../src/main/engine-types';
 
 // Helper: create a valid default config
 function createDefaultConfig(): EngineConfigFile {
@@ -60,7 +55,7 @@ describe('EngineConfigService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     // Reset singleton for each test
-    EngineConfigService['instance'] = undefined as any;
+    delete EngineConfigService['instance'];
     service = EngineConfigService.getInstance();
   });
 
@@ -82,14 +77,16 @@ describe('EngineConfigService', () => {
       // Should write default config
       expect(mockedFs.writeFileSync).toHaveBeenCalledTimes(1);
       const writtenPath = mockedFs.writeFileSync.mock.calls[0][0];
-      const writtenData = JSON.parse(mockedFs.writeFileSync.mock.calls[0][1] as string);
+      const writtenData = JSON.parse(
+        mockedFs.writeFileSync.mock.calls[0][1] as string
+      ) as EngineConfigFile;
       expect(writtenPath).toContain('engines.json');
       expect(writtenData.version).toBe('1.0');
       expect(writtenData.engines).toHaveLength(3);
       expect(writtenData.defaultEngineId).toBe('builtin-eleeye');
 
       // Verify builtin engines
-      const ids = writtenData.engines.map((e: any) => e.id);
+      const ids = writtenData.engines.map((engine) => engine.id);
       expect(ids).toContain('builtin-eleeye');
       expect(ids).toContain('builtin-gg');
       expect(ids).toContain('builtin-sachess');
@@ -335,7 +332,7 @@ describe('EngineConfigService', () => {
 
     it('should detect UCI engine', async () => {
       const mockProc = createMockProcess();
-      mockedSpawn.mockReturnValue(mockProc as any);
+      mockedSpawn.mockReturnValue(mockProc as unknown as ReturnType<typeof spawn>);
 
       const promise = service.probeEngine('C:\\engines\\pikafish.exe');
 
@@ -353,7 +350,7 @@ describe('EngineConfigService', () => {
     it('should detect UCCI engine after UCI timeout', async () => {
       jest.useFakeTimers();
       const mockProc = createMockProcess();
-      mockedSpawn.mockReturnValue(mockProc as any);
+      mockedSpawn.mockReturnValue(mockProc as unknown as ReturnType<typeof spawn>);
 
       const promise = service.probeEngine('C:\\engines\\eleeye.exe');
 

@@ -1,3 +1,4 @@
+import type { GameRecord } from './GameRecord';
 
 export interface AboutWindowInfo {
   visit_source_code_text?: string;
@@ -45,8 +46,6 @@ export interface BoardStatus {
 // ============================================================================
 // 棋谱保存/加载 IPC 通道
 // ============================================================================
-
-import { GameRecord } from './GameRecord';
 
 // --- 保存操作 ---
 /** 菜单触发保存 (Main → Renderer) */

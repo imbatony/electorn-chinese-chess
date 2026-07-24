@@ -1,8 +1,8 @@
 import * as React from 'react';
-import { useState, useCallback, useRef } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
-import { GameRecord, MoveEntry, GAME_RECORD_VERSION, DEFAULT_INITIAL_FEN } from '../common/GameRecord';
+import { GAME_RECORD_VERSION, GameRecord, MoveEntry } from '../common/GameRecord';
 import { PointsToICCS } from '../common/ICCS';
 import { ChessBoard } from './components/ChessBoard';
 import { CommandBar } from './components/CommandBar';
@@ -32,6 +32,9 @@ const Board = () => {
 
   React.useEffect(() => {
     chessCtx.setType('board');
+    return () => {
+      chessCtx.updateBoardStatus(null);
+    };
   }, []);
 
   const terminate = (red: boolean) => {
@@ -202,9 +205,7 @@ const Board = () => {
     // 恢复红黑方设置
     const redType = record.metadata.redPlayer.type;
     const blackType = record.metadata.blackPlayer.type;
-    chessCtx.setRedSide(redType);
-    chessCtx.setBlackSide(blackType);
-    chessCtx.syncSide({ red: redType, black: blackType });
+    chessCtx.setSides({ red: redType, black: blackType });
   }, [loadFromRecord, chessCtx]);
 
   /**

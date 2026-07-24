@@ -4,7 +4,7 @@
  * 运行在 Electron 主进程中，处理所有文件读写操作
  */
 
-import { app, dialog, BrowserWindow } from 'electron';
+import { app, BrowserWindow,dialog } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -15,7 +15,7 @@ import {
   validateGameRecord,
   ValidationResult,
 } from '../common/GameRecord';
-import { SaveResponse, LoadResponse, ExportResponse } from '../common/IPCInfos';
+import { ExportResponse,LoadResponse, SaveResponse } from '../common/IPCInfos';
 
 // ============================================================================
 // Constants

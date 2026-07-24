@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 
 import { FEN } from '../../common/Fen';
-import { GameRecord, DEFAULT_INITIAL_FEN } from '../../common/GameRecord';
+import { DEFAULT_INITIAL_FEN, GameRecord } from '../../common/GameRecord';
 import { ICCSToPoints } from '../../common/ICCS';
 import { Position } from '../types';
 
