@@ -1,5 +1,3 @@
-import * as _ from 'lodash';
-
 import { PointsToICCS } from './ICCS';
 import { PieceArray, PieceIndexMap } from './Pieces';
 
@@ -77,8 +75,24 @@ export class FEN {
   }
 
   public static UpdateFen(fen: FEN, x: number, y: number, tx: number, ty: number): FEN {
+    if (!fen.isValid()) {
+      throw new Error('Cannot update an invalid FEN');
+    }
+    for (const [name, value, maximum] of [
+      ['x', x, 8],
+      ['y', y, 9],
+      ['tx', tx, 8],
+      ['ty', ty, 9],
+    ] as const) {
+      if (!Number.isInteger(value) || value < 0 || value > maximum) {
+        throw new RangeError(`${name} is outside the chess board`);
+      }
+    }
     const arr = fen.arr;
-    const arrClone = _.cloneDeep(arr);
+    if (arr[y][x] === 0) {
+      throw new Error('Cannot move from an empty square');
+    }
+    const arrClone = arr.map((row) => [...row]);
     arrClone[y][x] = 0;
     arrClone[ty][tx] = arr[y][x];
 
@@ -121,6 +135,7 @@ export class FEN {
     initFen?: string,
     lastMove?: [number, number, number, number]
   ) {
+    this.valid = true;
     if (str) {
       if (FEN.verifyFEN(str)) {
         this.fenstr = str;
@@ -132,30 +147,29 @@ export class FEN {
     } else {
       this.fenstr = defaultFenInit;
     }
-    this.valid = true;
     if (lastMove) {
       this.lastMove = lastMove;
     } else {
       this.lastMove = [-1, -1, -1, -1];
     }
 
-    if (initFen) {
-      this.fenInit = initFen;
-    } else {
-      this.fenInit = defaultFenInit;
-    }
+    this.fenInit = initFen ?? this.fenstr;
     if (moves) {
       this.moves = moves;
     } else {
       this.moves = '';
     }
     const fenSplit = this.fenstr.split(' ');
-    const fenArray = fenSplit[0].split('/');
     this.turn = fenSplit[1] !== 'b';
     if (arr) {
       this.arr = arr;
       return;
     }
+    if (!this.valid) {
+      this.arr = Array.from({ length: 10 }, () => Array<number>(9).fill(0));
+      return;
+    }
+    const fenArray = fenSplit[0].split('/');
     this.arr = [];
     for (let i = 0; i <= 9; i++) {
       const line = fenArray[i];

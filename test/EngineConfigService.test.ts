@@ -316,11 +316,15 @@ describe('EngineConfigService', () => {
         stdout: EventEmitter;
         killed: boolean;
         kill: jest.Mock;
+        unref: jest.Mock;
       };
       proc.stdin = { write: jest.fn() };
       proc.stdout = new EventEmitter();
       proc.killed = false;
-      proc.kill = jest.fn(() => { proc.killed = true; });
+      proc.kill = jest.fn(() => {
+        proc.killed = true;
+      });
+      proc.unref = jest.fn();
       return proc;
     }
 
@@ -368,13 +372,36 @@ describe('EngineConfigService', () => {
     }, 10000);
 
     it('should fail when spawn throws', async () => {
-      mockedSpawn.mockImplementation(() => { throw new Error('ENOENT'); });
+      mockedSpawn.mockImplementation(() => {
+        throw new Error('ENOENT');
+      });
 
       const result = await service.probeEngine('C:\\nonexistent.exe');
       expect(result.success).toBe(false);
       expect(result.protocol).toBeNull();
       // 由于 probeEngine 会尝试 stdin 和 CLI 两种方式，最终返回通用错误消息
       expect(result.error).toContain('协议检测失败');
+    });
+
+    it('should clean up the process, listeners, and timers after probe timeout', async () => {
+      jest.useFakeTimers();
+      const mockProc = createMockProcess();
+      mockedSpawn.mockReturnValue(mockProc as unknown as ReturnType<typeof spawn>);
+
+      const promise = service.probeEngine('C:\\engines\\silent.exe');
+      await jest.advanceTimersByTimeAsync(4001);
+      const result = await promise;
+
+      expect(result.success).toBe(false);
+      expect(mockProc.stdin.write).toHaveBeenNthCalledWith(1, 'uci\n', expect.any(Function));
+      expect(mockProc.stdin.write).toHaveBeenNthCalledWith(2, 'ucci\n', expect.any(Function));
+      expect(mockProc.kill).toHaveBeenCalledTimes(1);
+      expect(mockProc.unref).toHaveBeenCalledTimes(1);
+      expect(mockProc.listenerCount('error')).toBe(0);
+      expect(mockProc.listenerCount('close')).toBe(0);
+      expect(mockProc.stdout.listenerCount('data')).toBe(0);
+      expect(jest.getTimerCount()).toBe(0);
+      jest.useRealTimers();
     });
   });
 });

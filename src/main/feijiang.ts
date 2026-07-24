@@ -1,7 +1,9 @@
 import { BrowserWindow } from 'electron';
+
 import os from 'os';
 
 import { BoardStatus } from '../common/IPCInfos';
+
 import { EngineConfigService } from './EngineConfigService';
 import { ChessEngine } from './UCCI';
 

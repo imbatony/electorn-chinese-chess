@@ -1,14 +1,13 @@
-import Konva from 'konva';
-import React, { useMemo, useRef } from 'react';
+import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Stage } from 'react-konva';
 
+import Konva from 'konva';
+
 import { FEN } from '../../common/Fen';
-import { ICCSToPoints } from '../../common/ICCS';
+import { validateEngineMove } from '../../common/MoveValidation';
 import { PieceArray } from '../../common/Pieces';
 import { ChessMoving, ChessMoving2, ChessSelected } from '../Animation';
-import { ChessContext } from '../context';
 import { event } from '../Event';
-import { usePosition } from '../hooks';
 import {
   boardHeight,
   boardOffSetX,
@@ -28,6 +27,10 @@ import {
   goErrorSound,
   selectSound,
 } from '../Sound';
+import { boardSquareToPiecePixel, pixelToBoardSquare } from '../boardCoordinates';
+import { ChessContext } from '../context';
+import { PositionIdentity, isSamePosition } from '../engineQuery';
+import { usePosition } from '../hooks';
 import { ChessBoradBG } from './ChessBoradBG';
 import { HintLayer } from './HintLayer';
 import { OperationLayer } from './OperationLayer';
@@ -35,11 +38,22 @@ import { PiecesLayer } from './PiecesLayer';
 
 interface ChessBoardProps {
   fen: FEN;
+  positionRevision: number;
   rotation: boolean;
   push: (x: number, y: number, tx: number, ty: number) => void;
 }
 
-export const ChessBoard = React.memo(({ rotation, fen }: ChessBoardProps) => {
+interface PendingEngineMove {
+  id: number;
+  sourcePosition: PositionIdentity;
+  points: [number, number, number, number];
+  endX: number;
+  endY: number;
+  checking: boolean;
+  captured: boolean;
+}
+
+export const ChessBoard = React.memo(({ rotation, fen, positionRevision }: ChessBoardProps) => {
   console.log('render ChessBoard');
   const chessCtx = React.useContext(ChessContext);
   const board = fen.getChessArray();
@@ -47,8 +61,22 @@ export const ChessBoard = React.memo(({ rotation, fen }: ChessBoardProps) => {
   const lastMove = fen.getLastMove();
   const [select, setSelect] = usePosition(-1, -1);
   const [opSelect, setOpSelect] = usePosition(-1, -1);
-  const chessRef = useRef(null);
-  const opChessRef = useRef(null);
+  const chessRef = useRef<Konva.Image>(null);
+  const opChessRef = useRef<Konva.Image>(null);
+  const selectionAnimationPending = useRef(false);
+  const [pendingEngineMove, setPendingEngineMove] = useState<PendingEngineMove | null>(null);
+  const engineMoveInFlight = useRef<number>();
+  const nextEngineMoveId = useRef(0);
+  const committedEngineMoveId = useRef<number>();
+  const currentPositionKey = fen.getFen();
+  const currentPosition = useRef<PositionIdentity>({
+    key: currentPositionKey,
+    revision: positionRevision,
+  });
+  currentPosition.current = {
+    key: currentPositionKey,
+    revision: positionRevision,
+  };
   const selected = useMemo<boolean>(() => {
     return (
       select.x >= 0 &&
@@ -71,45 +99,161 @@ export const ChessBoard = React.memo(({ rotation, fen }: ChessBoardProps) => {
     }
   }, [select, selected]);
 
-  const onMove = (move: string) => {
-    console.log('onMove');
-    // ...
-    const ICCS = move;
-    const [x, y, tx, ty] = ICCSToPoints(ICCS);
-    const endX = x * spaceX + startX - chessSize / 2;
-    const endY = (rotation ? y : 9 - y) * spaceY + startY - chessSize / 2;
-    const nextFen = FEN.UpdateFen(fen, x, y, tx, ty);
-    console.log('nextFen:', x, y, tx, ty);
-    setOpSelect(x, y);
-    ChessMoving2(opChessRef.current, endX, endY, () => {
+  useLayoutEffect(() => {
+    if (!selectionAnimationPending.current) {
+      return;
+    }
+    selectionAnimationPending.current = false;
+    if (chessRef.current) {
+      ChessSelected(chessRef.current);
+    }
+  });
+
+  const onMove = useCallback(
+    (move: string) => {
+      console.log('onMove');
+      const validation = validateEngineMove(move, fen);
+      if (!validation.valid) {
+        console.warn(
+          'Engine returned invalid move, skipped:',
+          move,
+          'reason' in validation ? validation.reason : ''
+        );
+        goErrorSound.play();
+        return;
+      }
+      if (engineMoveInFlight.current !== undefined) {
+        console.warn('Engine move skipped while another engine move is animating:', move);
+        return;
+      }
+      const [x, y, tx, ty] = validation.points;
+      const nextFen = validation.nextFen;
+      const target = boardSquareToPiecePixel(
+        tx,
+        ty,
+        rotation,
+        { startX, startY, spaceX, spaceY },
+        chessSize
+      );
+      console.log('nextFen:', x, y, tx, ty);
+      const id = ++nextEngineMoveId.current;
+      engineMoveInFlight.current = id;
+      setOpSelect(x, y);
+      setPendingEngineMove({
+        id,
+        sourcePosition: { ...currentPosition.current },
+        points: validation.points,
+        endX: target.x,
+        endY: target.y,
+        checking: nextFen.isChecking(fen.isRedTurn()),
+        captured: board[ty][tx] !== 0,
+      });
+    },
+    [board, fen, rotation, setOpSelect]
+  );
+
+  const clearPendingEngineMove = useCallback(
+    (id: number) => {
+      if (engineMoveInFlight.current === id) {
+        engineMoveInFlight.current = undefined;
+        setOpSelect(-1, -1);
+      }
+      setPendingEngineMove((current) => (current?.id === id ? null : current));
+    },
+    [setOpSelect]
+  );
+
+  useLayoutEffect(() => {
+    if (!pendingEngineMove) {
+      return;
+    }
+
+    const { id, sourcePosition } = pendingEngineMove;
+    if (!isSamePosition(sourcePosition, currentPosition.current)) {
+      clearPendingEngineMove(id);
+      return;
+    }
+
+    const shape = opChessRef.current;
+    if (!shape) {
+      console.error('Engine move animation source was not committed');
+      clearPendingEngineMove(id);
+      goErrorSound.play();
+      return;
+    }
+
+    let cancelled = false;
+    let finished = false;
+    const { points, endX, endY, checking, captured } = pendingEngineMove;
+    const [x, y, tx, ty] = points;
+    const animation = ChessMoving2(shape, endX, endY, () => {
+      if (cancelled || committedEngineMoveId.current === id) {
+        return;
+      }
+      finished = true;
+      if (!isSamePosition(sourcePosition, currentPosition.current)) {
+        clearPendingEngineMove(id);
+        return;
+      }
+      committedEngineMoveId.current = id;
+      clearPendingEngineMove(id);
       console.log('chess moving done');
-      const checking = nextFen.isChecking(fen.isRedTurn());
       if (checking) {
         checkedSound.play();
-      } else if (board[ty][tx] !== 0) {
-        console.log('eat tx', tx, 'ty', ty, board);
+      } else if (captured) {
+        console.log('eat tx', tx, 'ty', ty);
         eatSound.play();
       } else {
         clickSound.play();
       }
       event.emit('newmove', x, y, tx, ty);
     });
-  };
-  if (fen.isCheckmate(true)) {
-    setTimeout(() => {
-      event.emit('terminate', true);
-    }, 500);
-  }
-  if (fen.isCheckmate(false)) {
-    setTimeout(() => {
-      event.emit('terminate', false);
-    }, 500);
-  }
+
+    return () => {
+      cancelled = true;
+      if (!finished) {
+        animation.cancel();
+        if (!isSamePosition(sourcePosition, currentPosition.current)) {
+          clearPendingEngineMove(id);
+        }
+      }
+    };
+  }, [clearPendingEngineMove, currentPositionKey, pendingEngineMove, positionRevision]);
+
+  React.useEffect(() => {
+    return () => {
+      engineMoveInFlight.current = undefined;
+    };
+  }, []);
+
   React.useEffect(() => {
     event.addListener('move', onMove);
     return () => {
       event.removeListener('move', onMove);
     };
+  }, [onMove]);
+
+  const notifiedTerminalPosition = useRef<string>();
+  React.useEffect(() => {
+    let terminalWinner: boolean | null = null;
+    if (fen.isCheckmate(true)) {
+      terminalWinner = true;
+    } else if (fen.isCheckmate(false)) {
+      terminalWinner = false;
+    }
+    if (terminalWinner === null) {
+      notifiedTerminalPosition.current = undefined;
+      return;
+    }
+    const positionKey = fen.getFen();
+    if (notifiedTerminalPosition.current === positionKey) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      notifiedTerminalPosition.current = positionKey;
+      event.emit('terminate', terminalWinner);
+    }, 500);
+    return () => window.clearTimeout(timer);
   }, [fen]);
 
   const actionable = useMemo(() => {
@@ -126,12 +270,17 @@ export const ChessBoard = React.memo(({ rotation, fen }: ChessBoardProps) => {
         goErrorSound.play();
         return;
       }
-      const x = Math.ceil((evt.evt.offsetX - startX - spaceX / 2) / spaceX);
-      let y = Math.ceil((evt.evt.offsetY - startY - spaceY / 2) / spaceY);
-      const positionY = y;
-      if (!rotation) {
-        y = 9 - y;
+      const square = pixelToBoardSquare(evt.evt.offsetX, evt.evt.offsetY, rotation, {
+        startX,
+        startY,
+        spaceX,
+        spaceY,
+      });
+      if (!square) {
+        goErrorSound.play();
+        return;
       }
+      const { x, y, displayY: positionY } = square;
       if (selected && availableMovement.filter(([ax, ay]) => ax == x && ay == y).length === 1) {
         const endX = x * spaceX + startX - chessSize / 2;
         const endY = positionY * spaceY + startY - chessSize / 2;
@@ -162,18 +311,16 @@ export const ChessBoard = React.memo(({ rotation, fen }: ChessBoardProps) => {
         });
         return;
       }
-      setSelect(x, y);
-      if (chessRef.current) {
-        ChessSelected(chessRef.current);
-      }
       if (board[y][x] > 0) {
         const c = PieceArray[board[y][x] - 1];
         if (c.IsRed() === turn) {
+          selectionAnimationPending.current = true;
           selectSound.play();
         }
       }
+      setSelect(x, y);
     },
-    [selected, availableMovement, select, actionable]
+    [selected, availableMovement, select, actionable, fen, rotation, setSelect, turn, board]
   );
 
   return (

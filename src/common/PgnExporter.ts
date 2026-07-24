@@ -3,7 +3,6 @@
  *
  * 将 GameRecord 导出为 PGN (Portable Game Notation) 中国象棋格式
  */
-
 import { GameRecord, GameResult } from './GameRecord';
 
 /**
@@ -44,7 +43,7 @@ export class PgnExporter {
 
     // 基本标签
     headers.push('[Game "Chinese Chess"]');
-    
+
     // 日期 (PGN 格式: YYYY.MM.DD)
     const date = new Date(meta.date);
     const dateStr = `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}`;
@@ -55,7 +54,8 @@ export class PgnExporter {
     headers.push(`[Red "${redName}"]`);
 
     // 黑方
-    const blackName = meta.blackPlayer.name || PgnExporter.getPlayerDisplayName(meta.blackPlayer.type);
+    const blackName =
+      meta.blackPlayer.name || PgnExporter.getPlayerDisplayName(meta.blackPlayer.type);
     headers.push(`[Black "${blackName}"]`);
 
     // 结果
@@ -96,7 +96,7 @@ export class PgnExporter {
     }
 
     const moveTexts: string[] = [];
-    
+
     for (let i = 0; i < record.moves.length; i += 2) {
       const moveNumber = Math.floor(i / 2) + 1;
       const redMove = record.moves[i];

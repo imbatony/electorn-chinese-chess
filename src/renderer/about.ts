@@ -1,18 +1,23 @@
-import './about.css';
+import { AboutInfoPayload } from '../common/IPCInfos';
 
 import ICON from '../../assets/img/ICON.png';
-import { AboutWindowInfo } from '../common/IPCInfos';
+import './about.css';
 
-const { ipcRenderer, shell } = window.require('electron');
-
-ipcRenderer.on(
-  'about-window:info',
-  (_: any, info: AboutWindowInfo, app_name: string, version: string) => {
+window.aboutApi.onInfo(
+  ({ info, appName: app_name, version, runtimeVersions }: AboutInfoPayload) => {
     console.log(info);
     // Note: app.getName() was replaced with app.name at Electron v7
-    const open_home = () => shell.openExternal(info.homepage);
-    const content = info.use_inner_html ? 'innerHTML' : 'innerText';
-    document.title = info.win_options.title || `About ${app_name}`;
+    const open_home = (): void => {
+      void window.aboutApi.openExternal(info.homepage);
+    };
+    const setContent = (element: HTMLElement, value: string): void => {
+      if (info.use_inner_html) {
+        element.innerHTML = value;
+      } else {
+        element.innerText = value;
+      }
+    };
+    document.title = info.title || `About ${app_name}`;
 
     const title_elem = document.querySelector('.title') as HTMLHeadingElement;
     title_elem.innerText = `${app_name} ${version}`;
@@ -25,19 +30,19 @@ ipcRenderer.on(
       logo_elem.classList.add('clickable');
     }
 
-    const copyright_elem = document.querySelector('.copyright') as any;
+    const copyright_elem = document.querySelector('.copyright') as HTMLElement;
     if (info.copyright) {
-      copyright_elem[content] = info.copyright;
+      setContent(copyright_elem, info.copyright);
     } else if (info.license) {
-      copyright_elem[content] = `Distributed under ${info.license} license.`;
+      setContent(copyright_elem, `Distributed under ${info.license} license.`);
     }
 
     const icon_elem = document.getElementById('app-icon') as HTMLImageElement;
     icon_elem.src = ICON;
 
     if (info.description) {
-      const desc_elem = document.querySelector('.description') as any;
-      desc_elem[content] = info.description;
+      const desc_elem = document.querySelector('.description') as HTMLElement;
+      setContent(desc_elem, info.description);
     }
 
     if (info.bug_report_url) {
@@ -45,7 +50,7 @@ ipcRenderer.on(
       bug_report.innerText = info.bug_link_text || 'Report an issue';
       bug_report.addEventListener('click', (e) => {
         e.preventDefault();
-        shell.openExternal(info.bug_report_url);
+        void window.aboutApi.openExternal(info.bug_report_url);
       });
     }
     if (info.homepage) {
@@ -53,7 +58,7 @@ ipcRenderer.on(
       homepageEle.innerText = info.visit_source_code_text || 'Visit source code';
       homepageEle.addEventListener('click', (e) => {
         e.preventDefault();
-        shell.openExternal(info.homepage);
+        void window.aboutApi.openExternal(info.homepage);
       });
     }
 
@@ -70,14 +75,18 @@ ipcRenderer.on(
     if (info.adjust_window_size) {
       const height = document.body.scrollHeight;
       const width = document.body.scrollWidth;
-      ipcRenderer.send('about-window:adjust-window-size', height, width, !!info.show_close_button);
+      window.aboutApi.adjustWindow({
+        height,
+        width,
+        showCloseButton: !!info.show_close_button,
+      });
     }
 
     if (info.use_version_info) {
       const versions = document.querySelector('.versions');
       const version_info: [string, string][] = Array.isArray(info.use_version_info)
         ? info.use_version_info
-        : ['electron', 'chrome', 'node', 'v8'].map((e) => [e, process.versions[e]]);
+        : runtimeVersions;
       for (const [name, value] of version_info) {
         const tr = document.createElement('tr');
         const name_td = document.createElement('td');
@@ -96,7 +105,7 @@ ipcRenderer.on(
       close_button.innerText = info.show_close_button;
       close_button.addEventListener('click', (e) => {
         e.preventDefault();
-        ipcRenderer.send('about-window:close-window');
+        window.aboutApi.closeWindow();
       });
       buttons.appendChild(close_button);
       close_button.focus();

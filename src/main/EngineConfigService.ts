@@ -1,5 +1,6 @@
-import { ChildProcessWithoutNullStreams, spawn } from 'child_process';
 import { app } from 'electron';
+
+import { ChildProcessWithoutNullStreams, spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 
@@ -151,7 +152,7 @@ export class EngineConfigService {
 
   /**
    * 探测指定 EXE 文件的引擎协议类型.
-   * 
+   *
    * 探测策略:
    * 1. 启动引擎，通过 stdin 发送 'uci' 命令，等待 2 秒
    * 2. 如果收到 'uciok' → UCI 协议
@@ -179,29 +180,107 @@ export class EngineConfigService {
    */
   private probeEngineStdin(exePath: string): Promise<EngineProbeResult> {
     return new Promise((resolve) => {
-      let proc: ChildProcessWithoutNullStreams;
+      let proc: ChildProcessWithoutNullStreams | null = null;
       let buffer = '';
-      let resolved = false;
+      let finished = false;
       let phase: 'uci' | 'ucci' = 'uci';
       let engineName: string | undefined;
+      let phaseTimer: ReturnType<typeof setTimeout> | null = null;
 
       const cleanup = () => {
-        if (proc && !proc.killed) {
-          proc.kill();
-        }
+        if (phaseTimer) clearTimeout(phaseTimer);
+        phaseTimer = null;
+        if (!proc) return;
+        proc.stdout.removeListener('data', onData);
+        proc.removeListener('error', onError);
+        proc.removeListener('close', onClose);
+        if (!proc.killed) proc.kill();
+        proc.unref();
       };
 
       const finish = (result: EngineProbeResult) => {
-        if (resolved) return;
-        resolved = true;
+        if (finished) return;
+        finished = true;
         cleanup();
         resolve(result);
+      };
+
+      const onError = (err: Error) => {
+        finish({
+          success: false,
+          protocol: null,
+          error: `引擎进程错误: ${err.message}`,
+        });
+      };
+
+      const onClose = () => {
+        finish({
+          success: false,
+          protocol: null,
+          error: '引擎在协议检测完成前退出',
+        });
+      };
+
+      const onData = (data: Buffer) => {
+        buffer += data.toString('utf8');
+        const lines = buffer.split(/\r?\n/);
+        buffer = lines.pop() ?? '';
+        for (const rawLine of lines) {
+          const line = rawLine.trim();
+          if (line.startsWith('id name ')) engineName = line.slice(8).trim();
+          if (phase === 'uci' && line === 'uciok') {
+            finish({ success: true, protocol: 'uci', name: engineName });
+            return;
+          }
+          if (phase === 'ucci' && line === 'ucciok') {
+            finish({ success: true, protocol: 'ucci', name: engineName });
+            return;
+          }
+        }
+      };
+
+      const write = (command: 'uci' | 'ucci') => {
+        try {
+          proc!.stdin.write(`${command}\n`, (error) => {
+            if (error) {
+              finish({
+                success: false,
+                protocol: null,
+                error: `写入引擎失败: ${error.message}`,
+              });
+            }
+          });
+        } catch (error) {
+          finish({
+            success: false,
+            protocol: null,
+            error: `写入引擎失败: ${error instanceof Error ? error.message : String(error)}`,
+          });
+        }
+      };
+
+      const startTimer = () => {
+        phaseTimer = setTimeout(() => {
+          if (phase === 'uci') {
+            phase = 'ucci';
+            buffer = '';
+            engineName = undefined;
+            write('ucci');
+            startTimer();
+          } else {
+            finish({
+              success: false,
+              protocol: null,
+              error: 'stdin 模式超时',
+            });
+          }
+        }, 2000);
       };
 
       try {
         proc = spawn(exePath, []);
       } catch (err) {
-        resolve({
+        finish({
           success: false,
           protocol: null,
           error: `无法启动引擎: ${err instanceof Error ? err.message : String(err)}`,
@@ -209,59 +288,11 @@ export class EngineConfigService {
         return;
       }
 
-      proc.on('error', (err) => {
-        finish({
-          success: false,
-          protocol: null,
-          error: `引擎进程错误: ${err.message}`,
-        });
-      });
-
-      proc.stdout.on('data', (data: Buffer) => {
-        buffer += data.toString('utf8');
-        const lines = buffer.split('\n');
-
-        for (const line of lines) {
-          const trimmed = line.trim();
-
-          // Extract engine name from "id name ..."
-          if (trimmed.startsWith('id name ')) {
-            engineName = trimmed.substring(8).trim();
-          }
-
-          // Check for protocol response
-          if (phase === 'uci' && trimmed === 'uciok') {
-            finish({ success: true, protocol: 'uci', name: engineName });
-            return;
-          }
-          if (phase === 'ucci' && trimmed === 'ucciok') {
-            finish({ success: true, protocol: 'ucci', name: engineName });
-            return;
-          }
-        }
-      });
-
-      // Phase 1: Send 'uci', wait 2s
-      proc.stdin.write('uci\n');
-
-      const uciTimeout = setTimeout(() => {
-        // UCI failed, try UCCI
-        phase = 'ucci';
-        buffer = '';
-        engineName = undefined;
-        proc.stdin.write('ucci\n');
-
-        // Phase 2: Wait 2s for UCCI response
-        setTimeout(() => {
-          finish({
-            success: false,
-            protocol: null,
-            error: 'stdin 模式超时',
-          });
-        }, 2000);
-      }, 2000);
-
-      proc.on('close', () => clearTimeout(uciTimeout));
+      proc.stdout.on('data', onData);
+      proc.on('error', onError);
+      proc.on('close', onClose);
+      write('uci');
+      startTimer();
     });
   }
 

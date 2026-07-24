@@ -52,7 +52,7 @@ export class King extends BasePiece {
     const movements: [number, number][] = [];
 
     // 容错
-    if (x < 0 && x > 8 && y < 0 && y > 9) {
+    if (x < 0 || x > 8 || y < 0 || y > 9) {
       return movements;
     }
     const no = board[y][x];

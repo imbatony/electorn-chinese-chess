@@ -1,6 +1,7 @@
-import { ImageConfig } from 'konva/lib/shapes/Image';
 import * as React from 'react';
 import { Image, Layer } from 'react-konva';
+
+import { ImageConfig, Image as KonvaImage } from 'konva/lib/shapes/Image';
 
 import { ChessImageArray, chessSize, spaceX, spaceY, startX, startY } from '../Images';
 import { Position } from '../types';
@@ -11,8 +12,8 @@ interface PiecesLayerProps {
   select: Position;
   opSelect: Position;
   lastMove: [fx: number, fy: number, tx: number, ty: number];
-  chessRef: React.MutableRefObject<any>;
-  opChessRef: React.MutableRefObject<any>;
+  chessRef: React.RefObject<KonvaImage>;
+  opChessRef: React.RefObject<KonvaImage>;
 }
 
 export const PiecesLayer = React.memo((props: PiecesLayerProps) => {
@@ -36,17 +37,16 @@ export const PiecesLayer = React.memo((props: PiecesLayerProps) => {
             };
             if (shawdow) {
               image.shadowBlur = 10;
-              ((image.shadowColor = 'white'), (image.shadowOpacity = 0.8));
+              image.shadowColor = 'white';
+              image.shadowOpacity = 0.8;
             }
+            let imageRef: React.RefObject<KonvaImage> | undefined;
             if (x == props.select.x && y == props.select.y) {
-              image.ref = props.chessRef;
-              return <Image {...image}></Image>;
+              imageRef = props.chessRef;
             } else if (x == props.opSelect.x && y == props.opSelect.y) {
-              image.ref = props.opChessRef;
-              return <Image {...image}></Image>;
-            } else {
-              return <Image {...image}></Image>;
+              imageRef = props.opChessRef;
             }
+            return <Image ref={imageRef} {...image}></Image>;
           } else {
             return null;
           }

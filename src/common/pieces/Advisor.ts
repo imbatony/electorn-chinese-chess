@@ -47,7 +47,7 @@ export class Advisor extends BasePiece {
         if (board[7][3] === 0 || !ChessArray[board[7][3] - 1].IsRed()) {
           movements.push([3, 7]);
         }
-        if (board[5][7] === 0 || !ChessArray[board[5][7] - 1].IsRed()) {
+        if (board[7][5] === 0 || !ChessArray[board[7][5] - 1].IsRed()) {
           movements.push([5, 7]);
         }
       }

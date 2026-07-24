@@ -1,61 +1,73 @@
+name: Build Release
+
 on:
   push:
-    # Sequence of patterns matched against refs/tags
     tags:
-    - 'v*' # Push events to matching v*, i.e. v1.0, v20.15.10
+      - 'v*'
 
-name: Build Release
+permissions:
+  contents: write
 
 jobs:
   build:
     name: Build Release & Upload Assets
     runs-on: windows-latest
-    strategy:
-      matrix:
-        node-version: [22.x]
+
     steps:
-      - name: Get tag
-        id: tag
-        uses: dawidd6/action-get-tag@v1
-        with:
-          # Optionally strip `v` prefix
-          strip_v: true
-      - name: Use tag
-        run: echo ${{steps.tag.outputs.tag}}
       - name: Checkout code
         uses: actions/checkout@v4
-      - name: Build project Use Node.js ${{ matrix.node-version }}
+      - name: Use Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version: 22.x
           cache: 'npm'
-      - run: npm install
-      - run: npm run make:prod
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
+      - name: Verify release tag
+        shell: pwsh
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ github.ref }}
-          release_name: ${{steps.tag.outputs.tag}}
-          draft: false
-          prerelease: false
-      - name: Upload Windows Zip Package
-        uses: actions/upload-release-asset@v1
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          $packageVersion = (Get-Content -Raw "package.json" | ConvertFrom-Json).version
+          $expectedTag = "v$packageVersion"
+          if ($env:RELEASE_TAG -cne $expectedTag) {
+            throw "Release tag '$env:RELEASE_TAG' must exactly match '$expectedTag'."
+          }
+      - name: Install dependencies
+        run: npm ci
+      - name: Check formatting
+        run: npm run format:check
+      - name: Lint
+        run: npm run lint -- --max-warnings=0
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Check unused code
+        run: npm run knip
+      - name: Test
+        run: npm test -- --runInBand --detectOpenHandles
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --registry=https://registry.npmjs.org
+      - name: Package
+        run: npm run package
+      - name: Build production installers
+        run: npm run make:prod
+      - name: Create release and upload artifacts
+        shell: pwsh
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
-          asset_path: ./out/make/zip/win32/x64/飞将象棋-win32-x64-${{steps.tag.outputs.tag}}.zip
-          asset_name: windows-win32-x64-${{steps.tag.outputs.tag}}.zip
-          asset_content_type: application/zip
-      - name: Upload Windows SetUp Package
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
-          asset_path: ./out/make/squirrel.windows/x64/飞将象棋-${{steps.tag.outputs.tag}} Setup.exe
-          asset_name: windows-${{steps.tag.outputs.tag}} Setup.exe
-          asset_content_type: application/octet-stream
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          $zipFiles = @(Get-ChildItem -Path "out\make\zip\win32\x64" -Filter "*.zip" -File -Recurse)
+          $setupFiles = @(Get-ChildItem -Path "out\make\squirrel.windows\x64" -Filter "*Setup.exe" -File -Recurse)
+
+          if ($zipFiles.Count -ne 1) {
+            throw "Expected exactly one Windows zip artifact, found $($zipFiles.Count)."
+          }
+          if ($setupFiles.Count -ne 1) {
+            throw "Expected exactly one Windows setup artifact, found $($setupFiles.Count)."
+          }
+          if ($zipFiles[0].Length -eq 0 -or $setupFiles[0].Length -eq 0) {
+            throw "Release artifacts must not be empty."
+          }
+
+          & gh release create "$env:RELEASE_TAG" "$($zipFiles[0].FullName)" "$($setupFiles[0].FullName)" `
+            --title "$env:RELEASE_TAG" `
+            --generate-notes

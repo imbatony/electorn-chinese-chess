@@ -1,10 +1,40 @@
-import { app as appMain, BrowserWindow as BrowserWindowMain, ipcMain, shell } from 'electron';
+import {
+  BrowserWindow as BrowserWindowMain,
+  IpcMainEvent,
+  app as appMain,
+  ipcMain,
+  shell,
+} from 'electron';
+
 import * as path from 'path';
 
+import {
+  AboutAdjustWindowKey,
+  AboutCloseWindowKey,
+  AboutInfoKey,
+  AboutInfoPayload,
+  AboutOpenExternalKey,
+  AboutPageInfo,
+  AboutWindowInfo,
+} from '../common/IPCInfos';
+import { isAboutAdjustWindowRequest, isAllowedExternalUrl } from '../common/IPCSecurity';
+
 import pkg from '../../package.json';
-import { AboutWindowInfo } from '../common/IPCInfos';
 
 declare const ABOUT_WINDOW_WEBPACK_ENTRY: string;
+declare const ABOUT_WINDOW_PRELOAD_WEBPACK_ENTRY: string;
+
+const aboutWebContentsIds = new Set<number>();
+
+ipcMain.handle(AboutOpenExternalKey, async (event, url: unknown) => {
+  if (!aboutWebContentsIds.has(event.sender.id) || event.senderFrame !== event.sender.mainFrame) {
+    throw new Error('拒绝来自未知窗口或子框架的请求');
+  }
+  if (!isAllowedExternalUrl(url)) {
+    throw new Error('仅允许打开 HTTP 或 HTTPS 链接');
+  }
+  await shell.openExternal(url);
+});
 
 // function loadPackageJson(pkg_path: string): PackageJson {
 //     try {
@@ -114,54 +144,72 @@ export function openAboutWindow(info: AboutWindowInfo) {
       titleBarStyle: 'hidden-inset',
       show: !info.adjust_window_size,
       webPreferences: {
-        // For security reasons, nodeIntegration is no longer true by default when using Electron v5 or later
-        // nodeIntegration can be safely enabled as long as the window source is not remote
-        nodeIntegration: true,
-        // From Electron v12, this option is set to true by default
-        contextIsolation: false,
+        preload: ABOUT_WINDOW_PRELOAD_WEBPACK_ENTRY,
+        nodeIntegration: false,
+        contextIsolation: true,
+        sandbox: true,
       },
     },
     info.win_options || {}
   );
+  options.webPreferences = {
+    ...(options.webPreferences || {}),
+    preload: ABOUT_WINDOW_PRELOAD_WEBPACK_ENTRY,
+    nodeIntegration: false,
+    contextIsolation: true,
+    sandbox: true,
+  };
 
   window = new BrowserWindow(options);
+  aboutWebContentsIds.add(window.webContents.id);
 
-  const on_win_adjust_req = (
-    _: unknown,
-    width: number,
-    height: number,
-    show_close_button: boolean
-  ) => {
-    if (height > 0 && width > 0) {
-      // Note:
-      // Add 30px(= about 2em) to add padding in window, if there is a close button, bit more
-      if (show_close_button) {
-        window.setContentSize(width, height + 40);
-      } else {
-        window.setContentSize(width, height + 52);
-      }
+  const isTrustedSender = (event: IpcMainEvent) =>
+    event.sender === window.webContents && event.senderFrame === event.sender.mainFrame;
+
+  const on_win_adjust_req = (event: IpcMainEvent, request: unknown) => {
+    if (!isTrustedSender(event)) {
+      console.error('[About] 拒绝来自未知窗口或子框架的尺寸请求');
+      return;
+    }
+    if (!isAboutAdjustWindowRequest(request)) {
+      console.error('[About] 拒绝无效的窗口尺寸请求');
+      return;
+    }
+    if (request.showCloseButton) {
+      window.setContentSize(request.width, request.height + 40);
+    } else {
+      window.setContentSize(request.width, request.height + 52);
     }
   };
-  const on_win_close_req = () => {
+  const on_win_close_req = (event: IpcMainEvent) => {
+    if (!isTrustedSender(event)) {
+      console.error('[About] 拒绝来自未知窗口或子框架的关闭请求');
+      return;
+    }
     window.close();
   };
-  ipc.on('about-window:adjust-window-size', on_win_adjust_req);
-  ipc.on('about-window:close-window', on_win_close_req);
+  ipc.on(AboutAdjustWindowKey, on_win_adjust_req);
+  ipc.on(AboutCloseWindowKey, on_win_close_req);
 
   window.once('closed', () => {
+    aboutWebContentsIds.delete(window.webContents.id);
     window = null;
-    ipc.removeListener('about-window:adjust-window-size', on_win_adjust_req);
-    ipc.removeListener('about-window:close-window', on_win_close_req);
+    ipc.removeListener(AboutAdjustWindowKey, on_win_adjust_req);
+    ipc.removeListener(AboutCloseWindowKey, on_win_close_req);
   });
   window.loadURL(ABOUT_WINDOW_WEBPACK_ENTRY);
 
   window.webContents.on('will-navigate', (e, url) => {
     e.preventDefault();
-    shell.openExternal(url);
+    if (isAllowedExternalUrl(url)) {
+      void shell.openExternal(url);
+    }
   });
   window.webContents.on('will-redirect', (e, url) => {
     e.preventDefault();
-    shell.openExternal(url);
+    if (isAllowedExternalUrl(url)) {
+      void shell.openExternal(url);
+    }
   });
 
   window.webContents.once('dom-ready', () => {
@@ -170,7 +218,32 @@ export function openAboutWindow(info: AboutWindowInfo) {
     info.win_options = { title: win_title };
     const app_name = info.product_name || app.name || app.getName();
     const version = app.getVersion();
-    window.webContents.send('about-window:info', info, app_name, version);
+    const pageInfo: AboutPageInfo = {
+      visit_source_code_text: info.visit_source_code_text,
+      product_name: info.product_name,
+      copyright: info.copyright,
+      homepage: info.homepage,
+      description: info.description,
+      license: info.license,
+      bug_report_url: info.bug_report_url,
+      css_path: info.css_path,
+      adjust_window_size: info.adjust_window_size,
+      use_inner_html: info.use_inner_html,
+      bug_link_text: info.bug_link_text,
+      use_version_info: info.use_version_info,
+      show_close_button: info.show_close_button,
+      title: win_title,
+    };
+    const payload: AboutInfoPayload = {
+      info: pageInfo,
+      appName: app_name,
+      version,
+      runtimeVersions: ['electron', 'chrome', 'node', 'v8'].map((name) => [
+        name,
+        process.versions[name],
+      ]),
+    };
+    window.webContents.send(AboutInfoKey, payload);
     if (info.open_devtools) {
       if (process.versions.electron >= '1.4') {
         window.webContents.openDevTools({ mode: 'detach' });

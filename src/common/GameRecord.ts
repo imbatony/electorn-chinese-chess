@@ -1,8 +1,9 @@
 /**
  * GameRecord - 棋谱保存与加载数据模型
  */
-
 import { FEN } from './Fen';
+import { TryICCSToPoints } from './ICCS';
+import { validateEngineMove } from './MoveValidation';
 
 // ============================================================================
 // Types & Interfaces
@@ -12,6 +13,7 @@ import { FEN } from './Fen';
  * 对局结果
  */
 export type GameResult = 'red_win' | 'black_win' | 'draw' | 'incomplete';
+export type GameMode = 'human-vs-ai' | 'human-vs-human' | 'ai-vs-ai';
 
 /**
  * 玩家信息
@@ -81,6 +83,10 @@ export const DEFAULT_INITIAL_FEN = 'rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C
 
 /** ICCS 着法正则表达式 */
 const ICCS_PATTERN = /^[a-i]\d[a-i]\d$/;
+const GAME_MODES: ReadonlyArray<GameMode> = ['human-vs-ai', 'human-vs-human', 'ai-vs-ai'];
+const GAME_RESULTS: ReadonlyArray<GameResult> = ['red_win', 'black_win', 'draw', 'incomplete'];
+const ISO_DATE_PATTERN =
+  /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,3})?(?:Z|([+-])(\d{2}):(\d{2}))$/;
 
 // ============================================================================
 // Validation
@@ -99,8 +105,49 @@ export interface ValidationResult {
  * @param iccs ICCS 字符串
  * @returns 是否合法
  */
-export function isValidICCS(iccs: string): boolean {
-  return ICCS_PATTERN.test(iccs);
+function isValidICCS(iccs: string): boolean {
+  return ICCS_PATTERN.test(iccs) && TryICCSToPoints(iccs) !== null;
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+function isValidISODate(value: unknown): value is string {
+  if (typeof value !== 'string') return false;
+  const match = ISO_DATE_PATTERN.exec(value);
+  if (!match || !Number.isFinite(Date.parse(value))) return false;
+
+  const [, year, month, day, hour, minute, second, , offsetHour, offsetMinute] = match;
+  const daysInMonth = new Date(Date.UTC(Number(year), Number(month), 0)).getUTCDate();
+  return (
+    Number(month) >= 1 &&
+    Number(month) <= 12 &&
+    Number(day) >= 1 &&
+    Number(day) <= daysInMonth &&
+    Number(hour) <= 23 &&
+    Number(minute) <= 59 &&
+    Number(second) <= 59 &&
+    (!offsetHour ||
+      (Number(offsetHour) <= 14 &&
+        Number(offsetMinute) <= 59 &&
+        (Number(offsetHour) < 14 || Number(offsetMinute) === 0)))
+  );
+}
+
+function validatePlayer(player: unknown, field: string, errors: string[]): void {
+  if (!player || typeof player !== 'object' || Array.isArray(player)) {
+    errors.push(`${field} 缺失或类型错误`);
+    return;
+  }
+
+  const info = player as Partial<PlayerInfo>;
+  if (!isNonEmptyString(info.type)) {
+    errors.push(`${field}.type 缺失或类型错误`);
+  }
+  if (info.name !== undefined && !isNonEmptyString(info.name)) {
+    errors.push(`${field}.name 必须为非空字符串`);
+  }
 }
 
 /**
@@ -119,8 +166,8 @@ export function validateGameRecord(record: unknown): ValidationResult {
   const r = record as Partial<GameRecord>;
 
   // Version check
-  if (!r.version || typeof r.version !== 'string') {
-    errors.push('缺少 version 字段或类型错误');
+  if (r.version !== GAME_RECORD_VERSION) {
+    errors.push(`不支持的 version: ${String(r.version)}`);
   }
 
   // Metadata check
@@ -128,28 +175,30 @@ export function validateGameRecord(record: unknown): ValidationResult {
     errors.push('缺少 metadata 字段或类型错误');
   } else {
     const m = r.metadata as Partial<GameMetadata>;
-    if (!m.date || typeof m.date !== 'string') {
-      errors.push('metadata.date 缺失或类型错误');
+    if (!isValidISODate(m.date)) {
+      errors.push('metadata.date 不是有效的 ISO 8601 日期');
     }
-    if (!m.redPlayer || typeof m.redPlayer !== 'object') {
-      errors.push('metadata.redPlayer 缺失或类型错误');
+    validatePlayer(m.redPlayer, 'metadata.redPlayer', errors);
+    validatePlayer(m.blackPlayer, 'metadata.blackPlayer', errors);
+    if (!GAME_MODES.includes(m.gameMode as GameMode)) {
+      errors.push(`无效的 gameMode 值: ${String(m.gameMode)}`);
     }
-    if (!m.blackPlayer || typeof m.blackPlayer !== 'object') {
-      errors.push('metadata.blackPlayer 缺失或类型错误');
-    }
-    if (!m.gameMode || typeof m.gameMode !== 'string') {
-      errors.push('metadata.gameMode 缺失或类型错误');
-    }
-    if (m.result !== undefined && !['red_win', 'black_win', 'draw', 'incomplete'].includes(m.result)) {
+    if (m.result !== undefined && !GAME_RESULTS.includes(m.result)) {
       errors.push(`无效的 result 值: ${m.result}`);
+    }
+    if (m.appVersion !== undefined && !isNonEmptyString(m.appVersion)) {
+      errors.push('metadata.appVersion 必须为非空字符串');
     }
   }
 
   // Initial FEN check
+  let reconstructedFen: FEN | null = null;
   if (!r.initialFen || typeof r.initialFen !== 'string') {
     errors.push('缺少 initialFen 字段或类型错误');
   } else if (!FEN.verifyFEN(r.initialFen)) {
     errors.push(`无效的初始 FEN: ${r.initialFen}`);
+  } else {
+    reconstructedFen = new FEN(r.initialFen);
   }
 
   // Moves array check
@@ -162,20 +211,31 @@ export function validateGameRecord(record: unknown): ValidationResult {
         return;
       }
       const m = move as Partial<MoveEntry>;
-      if (!m.iccs || !isValidICCS(m.iccs)) {
+      if (typeof m.iccs !== 'string' || !isValidICCS(m.iccs)) {
         errors.push(`moves[${i}].iccs 无效: ${m.iccs}`);
+      } else if (reconstructedFen) {
+        const validation = validateEngineMove(m.iccs, reconstructedFen);
+        if (validation.valid === false) {
+          errors.push(`moves[${i}].iccs 非法: ${validation.reason}`);
+          reconstructedFen = null;
+        } else {
+          reconstructedFen = validation.nextFen;
+          if (m.fen !== reconstructedFen.getFen()) {
+            errors.push(`moves[${i}].fen 与着法结果不一致: 应为 ${reconstructedFen.getFen()}`);
+          }
+        }
       }
-      if (!m.fen || !FEN.verifyFEN(m.fen)) {
+      if (typeof m.fen !== 'string' || !FEN.verifyFEN(m.fen)) {
         errors.push(`moves[${i}].fen 无效`);
       }
-      if (typeof m.index !== 'number' || m.index !== i + 1) {
+      if (!Number.isInteger(m.index) || m.index !== i + 1) {
         errors.push(`moves[${i}].index 应为 ${i + 1}, 实际为 ${m.index}`);
       }
     });
   }
 
   // Current index check
-  if (typeof r.currentIndex !== 'number') {
+  if (!Number.isInteger(r.currentIndex)) {
     errors.push('缺少 currentIndex 字段或类型错误');
   } else if (r.moves && (r.currentIndex < 0 || r.currentIndex > r.moves.length)) {
     errors.push(`currentIndex 超出范围: ${r.currentIndex} (moves.length: ${r.moves?.length})`);

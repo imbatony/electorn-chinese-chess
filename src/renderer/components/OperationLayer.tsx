@@ -1,6 +1,7 @@
-import Konva from 'konva';
 import * as React from 'react';
 import { Layer, Rect } from 'react-konva';
+
+import Konva from 'konva';
 
 import { boardHeight, boardOffSetX, boardOffSetY, boardWith } from '../Images';
 

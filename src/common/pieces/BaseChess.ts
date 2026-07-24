@@ -111,24 +111,19 @@ export const GetChineseMovementNameForSimpleChess = (
   isRed: boolean,
   chessName: string
 ): string => {
-  let actionName;
-  const direction = isRed ? -1 : 1;
-  let positionTo = '';
-  let positionFrom = '' + (x + 1);
-  if (newY != x) {
-    actionName = (newY - y) * direction > 0 ? '进' : '退';
-    const move = Math.abs(newY - y);
-    positionTo = '' + move;
-    if (isRed) {
-      positionTo = MovementNameArray[move - 1];
-      positionFrom = MovementNameArray[8 - x];
-    }
-  } else if (newX != x) {
+  const formatNumber = (value: number) => (isRed ? MovementNameArray[value - 1] : `${value}`);
+  const positionFrom = formatNumber(isRed ? 9 - x : x + 1);
+  let actionName: '进' | '退' | '平';
+  let positionTo: string;
+
+  if (newY === y) {
     actionName = '平';
-    if (isRed) {
-      positionTo = MovementNameArray[newX];
-      positionFrom = MovementNameArray[8 - x];
-    }
+    positionTo = formatNumber(isRed ? 9 - newX : newX + 1);
+  } else {
+    const direction = isRed ? -1 : 1;
+    actionName = (newY - y) * direction > 0 ? '进' : '退';
+    positionTo =
+      newX === x ? formatNumber(Math.abs(newY - y)) : formatNumber(isRed ? 9 - newX : newX + 1);
   }
   return `${chessName}${positionFrom}${actionName}${positionTo}`;
 };
