@@ -1,7 +1,7 @@
 import { PieceArray } from './Pieces';
 
-export type Board = ReadonlyArray<ReadonlyArray<number>>;
-export type BoardPoint = readonly [number, number];
+type Board = ReadonlyArray<ReadonlyArray<number>>;
+type BoardPoint = readonly [number, number];
 
 const inBoard = (x: number, y: number): boolean => x >= 0 && x < 9 && y >= 0 && y < 10;
 
@@ -46,7 +46,7 @@ export const applyMove = (board: Board, x: number, y: number, tx: number, ty: nu
   return next;
 };
 
-export const findKing = (board: Board, isRed: boolean): BoardPoint | undefined => {
+const findKing = (board: Board, isRed: boolean): BoardPoint | undefined => {
   const king = isRed ? 1 : 8;
   for (let y = 0; y < 10; y++) {
     for (let x = 0; x < 9; x++) {
@@ -139,7 +139,7 @@ const attacksSquare = (
  * Returns whether a square is attacked by the supplied side without allocating
  * pseudo-move arrays. Flying generals are handled by areKingsFacing().
  */
-export const isSquareAttacked = (
+const isSquareAttacked = (
   board: Board,
   tx: number,
   ty: number,
@@ -174,7 +174,7 @@ export const isSideAttacked = (board: Board, sideInCheckRed: boolean): boolean =
   return Boolean(king && isSquareAttacked(board, king[0], king[1], !sideInCheckRed));
 };
 
-export const getPseudoLegalMoves = (
+const getPseudoLegalMoves = (
   board: Board,
   x: number,
   y: number
