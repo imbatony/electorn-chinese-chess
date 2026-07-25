@@ -1,5 +1,5 @@
 # 飞将象棋
-[![Build Release](https://github.com/imbatony/electorn-chinese-chess/actions/workflows/release.yml/badge.svg?branch=v0.0.16)](https://github.com/imbatony/electorn-chinese-chess/actions/workflows/release.yml)
+[![Build Release](https://github.com/imbatony/electorn-chinese-chess/actions/workflows/release.yml/badge.svg)](https://github.com/imbatony/electorn-chinese-chess/actions/workflows/release.yml)
 [![chatroom icon](https://patrolavia.github.io/telegram-badge/chat.png)](https://t.me/fjchess)
 
 `飞将象棋`是一款基于`Electorn`开发的开源象棋软件，目前内置四款引擎（`象眼(ElephantEye)`，`旋风(cyclone)`，`佳佳(gg)`，`南奥(sachess)`），同时支持添加自定义UCI/UCCI引擎（如`Pikafish`）。目前由于引擎限制，只能运行在Windows平台。
@@ -15,7 +15,6 @@
     - [象棋引擎](#象棋引擎)
     - [辅助功能](#辅助功能)
   - [版本更新说明](#版本更新说明)
-    - [v0.0.14](#v0014)
   - [感谢](#感谢)
 ## 游戏截图
 ![游戏截图](screeshot/screenshot.png "游戏截图")
@@ -111,22 +110,9 @@
 
 ## 版本更新说明
 
-### v0.0.16
-- 新增自定义引擎支持，可添加 Pikafish 等第三方 UCI/UCCI 引擎
-- 新增引擎配置管理功能（添加、删除、设置默认引擎）
-- 修复 UCI 引擎初始化问题，确保 `readyok` 响应正确处理
-- 修复 UCI 引擎 position 命令格式问题
-- 引擎配置持久化存储在 `%APPDATA%/飞将象棋/engines.json`
-
-### v0.0.15
-- 新增棋谱保存与加载功能
-- 新增 PGN 格式导出
-- 新增棋谱回放功能
-- 新增自动保存与崩溃恢复
-
-### v0.0.14
-- 修复关于菜单显示的问题
-- 修复打包名称问题
+完整版本记录请查看 [CHANGELOG.md](CHANGELOG.md)。安装包和历史版本可从
+[GitHub Releases](https://github.com/imbatony/electorn-chinese-chess/releases) 下载。
+维护者发布新版本时请遵循 [发布流程](docs/RELEASING.md)。
 
 ## 感谢
 
