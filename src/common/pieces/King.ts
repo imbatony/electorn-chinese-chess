@@ -1,28 +1,5 @@
 import { BasePiece, GetChineseMovementNameForSimpleChess } from './BaseChess';
 
-const isFacing = (
-  k: King,
-  board: ReadonlyArray<ReadonlyArray<number>>,
-  ChessArray: ReadonlyArray<BasePiece>,
-  x: number,
-  y: number
-): boolean => {
-  let direction = 1;
-  if (k.IsRed()) {
-    direction = -1;
-  }
-  for (let j = y + direction; j <= 9 && j >= 0; j = j + direction) {
-    if (board[j][x] !== 0) {
-      if (ChessArray[board[j][x] - 1] instanceof King) {
-        return true;
-      } else {
-        return false;
-      }
-    }
-  }
-  return false;
-};
-
 /**
  * 帅or将
  */
@@ -70,9 +47,7 @@ export class King extends BasePiece {
         //目标位置无棋
         (board[y - 1][x] === 0 ||
           // 或者是对方棋子
-          ChessArray[board[y - 1][x] - 1].IsRed() !== c.isRed) &&
-        //走完后不白脸
-        !isFacing(c, board, ChessArray, x, y - 1)
+          ChessArray[board[y - 1][x] - 1].IsRed() !== c.isRed)
       ) {
         movements.push([x, y - 1]);
       }
@@ -98,9 +73,7 @@ export class King extends BasePiece {
         //目标位置无棋
         (board[y + 1][x] === 0 ||
           // 或者是对方棋子
-          ChessArray[board[y + 1][x] - 1].IsRed() !== c.isRed) &&
-        //走完后不白脸
-        !isFacing(c, board, ChessArray, x, y + 1)
+          ChessArray[board[y + 1][x] - 1].IsRed() !== c.isRed)
       ) {
         movements.push([x, y + 1]);
       }
@@ -124,9 +97,7 @@ export class King extends BasePiece {
       //目标位置无棋
       (board[y][x - 1] === 0 ||
         // 或者是对方棋子
-        ChessArray[board[y][x - 1] - 1].IsRed() !== c.isRed) &&
-      //走完后不白脸
-      !isFacing(c, board, ChessArray, x - 1, y)
+        ChessArray[board[y][x - 1] - 1].IsRed() !== c.isRed)
     ) {
       movements.push([x - 1, y]);
     }
@@ -138,9 +109,7 @@ export class King extends BasePiece {
       //目标位置无棋
       (board[y][x + 1] === 0 ||
         // 或者是对方棋子
-        ChessArray[board[y][x + 1] - 1].IsRed() !== c.isRed) &&
-      //走完后不白脸
-      !isFacing(c, board, ChessArray, x + 1, y)
+        ChessArray[board[y][x + 1] - 1].IsRed() !== c.isRed)
     ) {
       movements.push([x + 1, y]);
     }

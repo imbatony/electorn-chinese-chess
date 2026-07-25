@@ -1,17 +1,26 @@
-import { BasePiece } from './BaseChess';
+import { BasePiece, GetChineseMovementNameForPiece } from './BaseChess';
 
 /**
  * 车
  */
 export class Rook extends BasePiece {
   GetChineseMovementName(
-    _x: number,
-    _y: number,
-    _newX: number,
-    _newY: number,
-    _board: ReadonlyArray<ReadonlyArray<number>>
+    x: number,
+    y: number,
+    newX: number,
+    newY: number,
+    board: ReadonlyArray<ReadonlyArray<number>>
   ): string {
-    throw new Error('Method not implemented.');
+    return GetChineseMovementNameForPiece(
+      x,
+      y,
+      newX,
+      newY,
+      this.IsRed(),
+      this.GetName(),
+      board,
+      'r'
+    );
   }
   GetName(): string {
     return '车';

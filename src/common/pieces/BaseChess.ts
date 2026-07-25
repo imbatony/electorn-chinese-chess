@@ -127,3 +127,96 @@ export const GetChineseMovementNameForSimpleChess = (
   }
   return `${chessName}${positionFrom}${actionName}${positionTo}`;
 };
+
+const pieceFamily = (piece: number): number => (piece - 1) % 7;
+
+const frontToBackLabels = (count: number): ReadonlyArray<string> => {
+  if (count === 2) {
+    return ['前', '后'];
+  }
+  if (count === 3) {
+    return ['前', '中', '后'];
+  }
+  return MovementNameArray.slice(0, count);
+};
+
+const moveSuffix = (
+  x: number,
+  y: number,
+  newX: number,
+  newY: number,
+  isRed: boolean
+): { action: '进' | '退' | '平'; destination: string } => {
+  const formatNumber = (value: number) => (isRed ? MovementNameArray[value - 1] : `${value}`);
+  const file = (positionX: number) => formatNumber(isRed ? 9 - positionX : positionX + 1);
+  if (newY === y) {
+    return { action: '平', destination: file(newX) };
+  }
+  const action = (newY - y) * (isRed ? -1 : 1) > 0 ? '进' : '退';
+  return {
+    action,
+    destination: newX === x ? formatNumber(Math.abs(newY - y)) : file(newX),
+  };
+};
+
+/**
+ * Formats the XQBase four-character notation for pieces which need same-file
+ * disambiguation. `board` stores the established PieceArray numeric order.
+ */
+export const GetChineseMovementNameForPiece = (
+  x: number,
+  y: number,
+  newX: number,
+  newY: number,
+  isRed: boolean,
+  chessName: string,
+  board: ReadonlyArray<ReadonlyArray<number>>,
+  code: 'n' | 'r' | 'c' | 'p'
+): string => {
+  const familyByCode = { n: 3, r: 4, c: 5, p: 6 };
+  const family = familyByCode[code];
+  const samePiece = (piece: number): boolean =>
+    piece !== 0 && piece <= 7 === isRed && pieceFamily(piece) === family;
+  const formatNumber = (value: number) => (isRed ? MovementNameArray[value - 1] : `${value}`);
+  const file = (positionX: number) => formatNumber(isRed ? 9 - positionX : positionX + 1);
+  const { action, destination } = moveSuffix(x, y, newX, newY, isRed);
+  const sameFile = board
+    .map((row, rowY) => ({ rowY, piece: row[x] }))
+    .filter(({ piece }) => samePiece(piece))
+    .map(({ rowY }) => rowY)
+    .sort((left, right) => (isRed ? left - right : right - left));
+
+  if (sameFile.length < 2) {
+    return `${chessName}${file(x)}${action}${destination}`;
+  }
+
+  const sourceIndex = sameFile.indexOf(y);
+  if (sourceIndex < 0) {
+    return `${chessName}${file(x)}${action}${destination}`;
+  }
+  const label = frontToBackLabels(sameFile.length)[sourceIndex];
+  if (code !== 'p') {
+    return `${label}${chessName}${action}${destination}`;
+  }
+
+  const stackedFiles = Array.from({ length: 9 }, (_, fileX) => ({
+    fileX,
+    rows: board
+      .map((row, rowY) => ({ rowY, piece: row[fileX] }))
+      .filter(({ piece }) => samePiece(piece))
+      .map(({ rowY }) => rowY)
+      .sort((left, right) => (isRed ? left - right : right - left)),
+  }))
+    .filter(({ rows }) => rows.length >= 2)
+    .sort((left, right) => (isRed ? right.fileX - left.fileX : left.fileX - right.fileX));
+
+  if (stackedFiles.length < 2) {
+    return `${label}${chessName}${action}${destination}`;
+  }
+
+  const stackedPawns = stackedFiles.flatMap(({ fileX, rows }) =>
+    rows.map((rowY) => ({ fileX, rowY }))
+  );
+  const globalIndex = stackedPawns.findIndex(({ fileX, rowY }) => fileX === x && rowY === y);
+  return `${MovementNameArray[globalIndex]}${chessName}${action}${destination}`;
+};
