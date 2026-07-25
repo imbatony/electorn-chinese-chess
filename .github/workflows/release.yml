@@ -8,6 +8,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build:
     name: Build Release & Upload Assets
@@ -15,22 +19,51 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
       - name: Use Node.js 22
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 22.x
           cache: 'npm'
       - name: Verify release tag
         shell: pwsh
         env:
+          GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          $packageVersion = (Get-Content -Raw "package.json" | ConvertFrom-Json).version
+          if ($env:RELEASE_TAG -cnotmatch '^v(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)$') {
+            throw "Release tag '$env:RELEASE_TAG' must use the exact vX.Y.Z format."
+          }
+
+          $package = Get-Content -Raw "package.json" | ConvertFrom-Json
+          $lock = Get-Content -Raw "package-lock.json" | ConvertFrom-Json -AsHashtable
+          $packageVersion = $package.version
           $expectedTag = "v$packageVersion"
           if ($env:RELEASE_TAG -cne $expectedTag) {
             throw "Release tag '$env:RELEASE_TAG' must exactly match '$expectedTag'."
           }
+          $lockVersion = $lock['version']
+          $lockRootVersion = $lock['packages']['']['version']
+          if ($lockVersion -cne $packageVersion -or $lockRootVersion -cne $packageVersion) {
+            throw "package.json and package-lock.json versions must all match '$packageVersion'."
+          }
+
+          git fetch origin main:refs/remotes/origin/main
+          $tagCommit = git rev-parse HEAD
+          $mainCommit = git rev-parse refs/remotes/origin/main
+          if ($tagCommit -cne $mainCommit) {
+            throw "Release tag '$env:RELEASE_TAG' must point to the latest origin/main commit."
+          }
+
+          gh release view "$env:RELEASE_TAG" --json id *> $null
+          if ($LASTEXITCODE -eq 0) {
+            throw "Release '$env:RELEASE_TAG' already exists."
+          }
+
+          npm run release:check
+          npm run release:notes -- "$packageVersion" "$env:RUNNER_TEMP\release-notes.md"
       - name: Install dependencies
         run: npm ci
       - name: Check formatting
@@ -73,11 +106,88 @@ jobs:
           New-Item -ItemType Directory -Path $releaseDirectory -Force | Out-Null
           $zipAsset = Join-Path $releaseDirectory "windows-win32-x64-$version.zip"
           $setupAsset = Join-Path $releaseDirectory "windows-$version.Setup.exe"
-          $notesFile = Join-Path $releaseDirectory "release-notes.txt"
+          $notesFile = Join-Path $env:RUNNER_TEMP "release-notes.md"
           Copy-Item -LiteralPath $zipFiles[0].FullName -Destination $zipAsset
           Copy-Item -LiteralPath $setupFiles[0].FullName -Destination $setupAsset
-          New-Item -ItemType File -Path $notesFile -Force | Out-Null
 
           & gh release create "$env:RELEASE_TAG" "$zipAsset" "$setupAsset" `
             --title "$version" `
-            --notes-file "$notesFile"
+            --notes-file "$notesFile" `
+            --draft
+
+          if ($LASTEXITCODE -ne 0) {
+            $partialRelease = gh release view "$env:RELEASE_TAG" `
+              --json name,isDraft 2> $null | ConvertFrom-Json
+            if (
+              $LASTEXITCODE -eq 0 -and
+              $partialRelease.name -ceq $version -and
+              $partialRelease.isDraft
+            ) {
+              gh release delete "$env:RELEASE_TAG" --yes *> $null
+            }
+            throw "Failed to create draft release '$env:RELEASE_TAG'."
+          }
+
+          $publicationAttempted = $false
+          try {
+            $release = gh release view "$env:RELEASE_TAG" `
+              --json tagName,name,body,isDraft,isPrerelease,assets | ConvertFrom-Json
+            $expectedNotes = (Get-Content -Raw $notesFile).Trim() -replace "`r`n", "`n"
+            $actualNotes = $release.body.Trim() -replace "`r`n", "`n"
+            $expectedAssets = @(
+              "windows-$version.Setup.exe",
+              "windows-win32-x64-$version.zip"
+            )
+            $actualAssets = @($release.assets | ForEach-Object { $_.name } | Sort-Object)
+
+            if ($release.tagName -cne $env:RELEASE_TAG -or $release.name -cne $version) {
+              throw "Draft release tag or title does not match '$env:RELEASE_TAG'."
+            }
+            if ([string]::IsNullOrWhiteSpace($release.body)) {
+              throw "Draft release notes must not be empty."
+            }
+            if ($actualNotes -cne $expectedNotes) {
+              throw "Draft release notes do not match CHANGELOG.md."
+            }
+            if (-not $release.isDraft -or $release.isPrerelease) {
+              throw "Release must remain a non-prerelease draft until verification succeeds."
+            }
+            if ((Compare-Object ($expectedAssets | Sort-Object) $actualAssets).Count -ne 0) {
+              throw "Draft assets do not match the required names: $($expectedAssets -join ', ')."
+            }
+            if (@($release.assets | Where-Object { $_.size -le 0 }).Count -ne 0) {
+              throw "Draft release assets must not be empty."
+            }
+
+            $publicationAttempted = $true
+            gh release edit "$env:RELEASE_TAG" --draft=false
+            if ($LASTEXITCODE -ne 0) {
+              throw "Draft release '$env:RELEASE_TAG' passed validation but could not be published."
+            }
+
+            $published = gh release view "$env:RELEASE_TAG" `
+              --json tagName,name,body,isDraft,isPrerelease,assets | ConvertFrom-Json
+            $publishedNotes = $published.body.Trim() -replace "`r`n", "`n"
+            $publishedAssets = @($published.assets | ForEach-Object { $_.name } | Sort-Object)
+            if (
+              $published.tagName -cne $env:RELEASE_TAG -or
+              $published.name -cne $version -or
+              $publishedNotes -cne $expectedNotes -or
+              (Compare-Object ($expectedAssets | Sort-Object) $publishedAssets).Count -ne 0 -or
+              @($published.assets | Where-Object { $_.size -le 0 }).Count -ne 0 -or
+              $published.isDraft -or
+              $published.isPrerelease
+            ) {
+              throw "Release '$env:RELEASE_TAG' was not published as a final release."
+            }
+          } catch {
+            $releaseFailure = $_
+            if ($publicationAttempted) {
+              throw "$releaseFailure Release publication was attempted; inspect the release manually."
+            }
+            gh release delete "$env:RELEASE_TAG" --yes *> $null
+            if ($LASTEXITCODE -ne 0) {
+              throw "$releaseFailure Release cleanup also failed; delete it manually before retrying."
+            }
+            throw $releaseFailure
+          }

@@ -20,14 +20,17 @@
     "lint": "eslint --ext .ts,.tsx .",
     "lint:fix": "eslint --fix --ext .ts,.tsx .",
     "typecheck": "tsc --noEmit",
-    "format": "prettier --write \"src/**/*.{ts,tsx}\"",
-    "format:check": "prettier --check \"src/**/*.{ts,tsx}\"",
+    "format": "prettier --write \"src/**/*.{ts,tsx}\" \"scripts/**/*.cjs\" \"test/Release.test.js\" \"AGENTS.md\" \"CHANGELOG.md\" \"README.md\" \"docs/RELEASING.md\" \".github/workflows/*.{yml,yaml}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx}\" \"scripts/**/*.cjs\" \"test/Release.test.js\" \"AGENTS.md\" \"CHANGELOG.md\" \"README.md\" \"docs/RELEASING.md\" \".github/workflows/*.{yml,yaml}\"",
     "knip": "knip",
     "code:clean": "npm run format && npm run lint:fix",
     "test": "jest",
     "testInBand": "jest --runInBand --detectOpenHandles",
     "test-c": "jest --coverage",
-    "clean": "rimraf ./out"
+    "clean": "rimraf ./out",
+    "release:check": "node scripts/release.cjs check",
+    "release:prepare": "node scripts/release.cjs prepare",
+    "release:notes": "node scripts/release.cjs notes"
   },
   "keywords": [],
   "author": {
