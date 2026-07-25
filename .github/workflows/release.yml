@@ -68,6 +68,16 @@ jobs:
             throw "Release artifacts must not be empty."
           }
 
-          & gh release create "$env:RELEASE_TAG" "$($zipFiles[0].FullName)" "$($setupFiles[0].FullName)" `
-            --title "$env:RELEASE_TAG" `
-            --generate-notes
+          $version = $env:RELEASE_TAG.Substring(1)
+          $releaseDirectory = Join-Path $env:RUNNER_TEMP "release-assets"
+          New-Item -ItemType Directory -Path $releaseDirectory -Force | Out-Null
+          $zipAsset = Join-Path $releaseDirectory "windows-win32-x64-$version.zip"
+          $setupAsset = Join-Path $releaseDirectory "windows-$version.Setup.exe"
+          $notesFile = Join-Path $releaseDirectory "release-notes.txt"
+          Copy-Item -LiteralPath $zipFiles[0].FullName -Destination $zipAsset
+          Copy-Item -LiteralPath $setupFiles[0].FullName -Destination $setupAsset
+          New-Item -ItemType File -Path $notesFile -Force | Out-Null
+
+          & gh release create "$env:RELEASE_TAG" "$zipAsset" "$setupAsset" `
+            --title "$version" `
+            --notes-file "$notesFile"
