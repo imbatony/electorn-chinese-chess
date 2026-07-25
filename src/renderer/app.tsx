@@ -1,6 +1,5 @@
 import * as React from 'react';
 import { createRoot } from 'react-dom/client';
-import { HashRouter, Route, Routes, useNavigate } from 'react-router-dom';
 
 import { GameRecord } from '../common/GameRecord';
 
@@ -17,11 +16,21 @@ import { PlaySide } from './types';
 let onChangeSide: (prev: PlaySide, cur: PlaySide) => void;
 
 const AppRoutes = () => {
-  const navigate = useNavigate();
+  const [path, setPath] = React.useState(() => window.location.hash.slice(1) || '/');
   const [pendingRecord, setPendingRecord] = React.useState<{
     record: GameRecord;
     disposition: 'clean' | 'recovery';
   }>();
+
+  const navigate = React.useCallback((nextPath: string) => {
+    window.location.hash = nextPath;
+  }, []);
+
+  React.useEffect(() => {
+    const handleHashChange = () => setPath(window.location.hash.slice(1) || '/');
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
 
   React.useEffect(() => {
     const openBoard = (record: GameRecord, disposition: 'clean' | 'recovery') => {
@@ -40,19 +49,16 @@ const AppRoutes = () => {
     };
   }, [navigate]);
 
+  const boardRoute = /^\/board\/(true|false)$/.exec(path);
+  if (!boardRoute) {
+    return <Welcome navigate={navigate} />;
+  }
   return (
-    <Routes>
-      <Route path="/" element={<Welcome />} />
-      <Route
-        path="/board/:rotation"
-        element={
-          <Board
-            pendingRecord={pendingRecord}
-            onRecordApplied={() => setPendingRecord(undefined)}
-          />
-        }
-      />
-    </Routes>
+    <Board
+      initialRotation={boardRoute[1] === 'true'}
+      pendingRecord={pendingRecord}
+      onRecordApplied={() => setPendingRecord(undefined)}
+    />
   );
 };
 
@@ -93,9 +99,7 @@ const App = () => {
           setChangeSideCallBack,
         }}
       >
-        <HashRouter>
-          <AppRoutes />
-        </HashRouter>
+        <AppRoutes />
       </ChessContext.Provider>
     </>
   );

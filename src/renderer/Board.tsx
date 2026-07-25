@@ -1,6 +1,5 @@
 import * as React from 'react';
 import { useCallback, useRef, useState } from 'react';
-import { useParams } from 'react-router-dom';
 
 import { FEN } from '../common/Fen';
 import { GAME_RECORD_VERSION, GameRecord, MoveEntry } from '../common/GameRecord';
@@ -17,6 +16,7 @@ import { useFEN } from './hooks';
 import { PlaySide } from './types';
 
 interface BoardProps {
+  initialRotation: boolean;
   pendingRecord?: {
     record: GameRecord;
     disposition: 'clean' | 'recovery';
@@ -24,12 +24,9 @@ interface BoardProps {
   onRecordApplied?: () => void;
 }
 
-const Board = ({ pendingRecord, onRecordApplied }: BoardProps) => {
-  const params = useParams();
+const Board = ({ initialRotation, pendingRecord, onRecordApplied }: BoardProps) => {
   const chessCtx = React.useContext(ChessContext);
-  const fenParams = params.fen;
-  const rotationParm: boolean = (params.rotation ?? 'true') === 'true';
-  const [rotation, setRotation] = useState(rotationParm);
+  const [rotation, setRotation] = useState(initialRotation);
   const [isDirty, setIsDirty] = useState(false);
   const loadDisposition = useRef<'clean' | 'recovery'>('clean');
   const queryTracker = useRef(new EngineQueryTracker());
@@ -59,7 +56,7 @@ const Board = ({ pendingRecord, onRecordApplied }: BoardProps) => {
     continueFromPosition,
     historyRevision,
     lastMutation,
-  } = useFEN(fenParams);
+  } = useFEN();
   if (
     queryRevision.current.fen !== fen ||
     queryRevision.current.historyRevision !== historyRevision ||

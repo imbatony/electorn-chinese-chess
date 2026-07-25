@@ -1,13 +1,15 @@
 import * as React from 'react';
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 
 import { DEFAULT_ENGINE_KEY } from '../common/constants';
 
 import { ChessContext } from './context';
 
-const Welcome = () => {
-  const navigate = useNavigate();
+interface WelcomeProps {
+  navigate: (path: string) => void;
+}
+
+const Welcome = ({ navigate }: WelcomeProps) => {
   const chessContext = React.useContext(ChessContext);
   const [step, setStep] = useState(0);
   const clickPvc = () => {
