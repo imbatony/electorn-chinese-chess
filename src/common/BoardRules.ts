@@ -139,12 +139,7 @@ const attacksSquare = (
  * Returns whether a square is attacked by the supplied side without allocating
  * pseudo-move arrays. Flying generals are handled by areKingsFacing().
  */
-const isSquareAttacked = (
-  board: Board,
-  tx: number,
-  ty: number,
-  attackingRed: boolean
-): boolean => {
+const isSquareAttacked = (board: Board, tx: number, ty: number, attackingRed: boolean): boolean => {
   for (let y = 0; y < 10; y++) {
     for (let x = 0; x < 9; x++) {
       const piece = board[y][x];
@@ -174,11 +169,7 @@ export const isSideAttacked = (board: Board, sideInCheckRed: boolean): boolean =
   return Boolean(king && isSquareAttacked(board, king[0], king[1], !sideInCheckRed));
 };
 
-const getPseudoLegalMoves = (
-  board: Board,
-  x: number,
-  y: number
-): Array<[number, number]> => {
+const getPseudoLegalMoves = (board: Board, x: number, y: number): Array<[number, number]> => {
   if (!inBoard(x, y) || board[y][x] === 0) {
     return [];
   }
