@@ -35,6 +35,9 @@ and payload types in `src/common/IPCInfos.ts` instead of using string literals.
 8. Add user-visible changes, compatibility changes, security/dependency changes,
    and release-process changes to the appropriate category in the `CHANGELOG.md`
    "未发布" section. Do not add purely internal refactors or test-only changes.
+   Keep every changelog entry on one physical line beginning with `- `; wrapped
+   continuation lines are rejected by the release parser. Run
+   `npm run release:check` after editing `CHANGELOG.md`.
 
 User-visible text should be Chinese and use established Chinese chess terminology.
 Comments should explain non-obvious rationale rather than restate the code.
