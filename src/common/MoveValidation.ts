@@ -1,3 +1,4 @@
+import { applyMove, areKingsFacing, isLegalMove } from './BoardRules';
 import { FEN } from './Fen';
 import { BoardPoints, TryICCSToPoints } from './ICCS';
 import { PieceArray } from './Pieces';
@@ -36,13 +37,15 @@ export function validateEngineMove(move: string, fen: FEN): ValidatedEngineMove 
     return { valid: false, reason: '引擎着法不符合棋子走法' };
   }
 
-  const nextFen = FEN.UpdateFen(fen, x, y, tx, ty);
-  if (nextFen.isChecking(!fen.isRedTurn())) {
-    return { valid: false, reason: '引擎着法会导致己方被将军' };
-  }
-  if (nextFen.isKingFacing()) {
+  const nextBoard = applyMove(board, x, y, tx, ty);
+  if (areKingsFacing(nextBoard)) {
     return { valid: false, reason: '引擎着法会导致将帅照面' };
   }
+  if (!isLegalMove(board, x, y, tx, ty, fen.isRedTurn())) {
+    return { valid: false, reason: '引擎着法会导致己方被将军' };
+  }
+
+  const nextFen = FEN.UpdateFen(fen, x, y, tx, ty);
 
   return { valid: true, points, nextFen };
 }

@@ -3,6 +3,7 @@ import { Stage } from 'react-konva';
 
 import Konva from 'konva';
 
+import { getLegalMovesFrom, hasLegalMove, isSideInCheck } from '../../common/BoardRules';
 import { FEN } from '../../common/Fen';
 import { validateEngineMove } from '../../common/MoveValidation';
 import { PieceArray } from '../../common/Pieces';
@@ -84,20 +85,15 @@ export const ChessBoard = React.memo(({ rotation, fen, positionRevision }: Chess
       board[select.y][select.x] > 0 &&
       PieceArray[board[select.y][select.x] - 1].IsRed() === turn
     );
-  }, [select]);
+  }, [board, select, turn]);
 
   const availableMovement = useMemo<Array<[number, number]>>(() => {
     if (!selected) {
       return [];
     } else {
-      return PieceArray[board[select.y][select.x] - 1].GetAvailableMovement(
-        select.x,
-        select.y,
-        board,
-        PieceArray
-      );
+      return getLegalMovesFrom(board, select.x, select.y, turn);
     }
-  }, [select, selected]);
+  }, [board, select, selected, turn]);
 
   useLayoutEffect(() => {
     if (!selectionAnimationPending.current) {
@@ -145,7 +141,7 @@ export const ChessBoard = React.memo(({ rotation, fen, positionRevision }: Chess
         points: validation.points,
         endX: target.x,
         endY: target.y,
-        checking: nextFen.isChecking(fen.isRedTurn()),
+        checking: isSideInCheck(nextFen.getChessArray(), !fen.isRedTurn()),
         captured: board[ty][tx] !== 0,
       });
     },
@@ -236,9 +232,9 @@ export const ChessBoard = React.memo(({ rotation, fen, positionRevision }: Chess
   const notifiedTerminalPosition = useRef<string>();
   React.useEffect(() => {
     let terminalWinner: boolean | null = null;
-    if (fen.isCheckmate(true)) {
+    if (!hasLegalMove(board, false)) {
       terminalWinner = true;
-    } else if (fen.isCheckmate(false)) {
+    } else if (!hasLegalMove(board, true)) {
       terminalWinner = false;
     }
     if (terminalWinner === null) {
@@ -254,7 +250,7 @@ export const ChessBoard = React.memo(({ rotation, fen, positionRevision }: Chess
       event.emit('terminate', terminalWinner);
     }, 500);
     return () => window.clearTimeout(timer);
-  }, [fen]);
+  }, [board, fen]);
 
   const actionable = useMemo(() => {
     if (fen.isRedTurn()) {
@@ -285,14 +281,8 @@ export const ChessBoard = React.memo(({ rotation, fen, positionRevision }: Chess
         const endX = x * spaceX + startX - chessSize / 2;
         const endY = positionY * spaceY + startY - chessSize / 2;
         const nextFen = FEN.UpdateFen(fen, select.x, select.y, x, y);
-        if (nextFen.isChecking(!turn) || nextFen.isKingFacing()) {
-          //被对方将军或者白脸，则点击无效
-          goErrorSound.play();
-          return;
-        }
-
-        const checking = nextFen.isChecking(turn);
-        const checkmate = nextFen.isCheckmate(turn);
+        const checking = isSideInCheck(nextFen.getChessArray(), !turn);
+        const checkmate = !hasLegalMove(nextFen.getChessArray(), !turn);
 
         ChessMoving(chessRef.current, endX, endY, () => {
           if (checkmate) {

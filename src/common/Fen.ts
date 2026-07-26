@@ -1,3 +1,4 @@
+import { areKingsFacing, hasLegalMove, isSideAttacked } from './BoardRules';
 import { PointsToICCS } from './ICCS';
 import { PieceArray, PieceIndexMap } from './Pieces';
 
@@ -92,7 +93,13 @@ export class FEN {
     if (arr[y][x] === 0) {
       throw new Error('Cannot move from an empty square');
     }
-    const arrClone = arr.map((row) => [...row]);
+    const arrClone = [...arr];
+    if (y === ty) {
+      arrClone[y] = [...arr[y]];
+    } else {
+      arrClone[y] = [...arr[y]];
+      arrClone[ty] = [...arr[ty]];
+    }
     arrClone[y][x] = 0;
     arrClone[ty][tx] = arr[y][x];
 
@@ -216,106 +223,18 @@ export class FEN {
     return this.arr;
   }
 
-  /**
-   * 是否某方将军
-   */
+  /** Returns whether the side identified by this legacy attacker's colour gives check. */
   isChecking(isRed = this.isRedTurn()): boolean {
-    let [kingPostionX, kingPostionY] = [0, 0];
-    for (let i = 0; i <= 8; i++) {
-      for (let j = 0; j <= 9; j++) {
-        if (this.arr[j][i] != 0) {
-          const piece = PieceArray[this.arr[j][i] - 1];
-          if (piece.IsRed() !== isRed && piece.GetCode().toLowerCase() === 'k') {
-            [kingPostionX, kingPostionY] = [i, j];
-          }
-        }
-      }
-    }
-
-    for (let i = 0; i <= 8; i++) {
-      for (let j = 0; j <= 9; j++) {
-        if (this.arr[j][i] != 0) {
-          const piece = PieceArray[this.arr[j][i] - 1];
-          if (piece.IsRed() === isRed && piece.CanCheck()) {
-            const checkMovement = piece
-              .GetAvailableMovement(i, j, this.arr, PieceArray)
-              .filter(([x, y]) => x === kingPostionX && y === kingPostionY).length;
-            if (checkMovement > 0) {
-              return true;
-            }
-          }
-        }
-      }
-    }
-    return false;
+    return isSideAttacked(this.arr, !isRed);
   }
 
   isKingFacing(): boolean {
-    for (let i = 0; i <= 8; i++) {
-      for (let j = 0; j <= 9; j++) {
-        if (this.arr[j][i] !== 0) {
-          const piece = PieceArray[this.arr[j][i] - 1];
-          if (piece.GetCode() === 'k') {
-            for (let k = j + 1; k <= 9; k++) {
-              if (this.arr[k][i] !== 0) {
-                const p = PieceArray[this.arr[k][i] - 1];
-                if (p.GetCode() === 'K') {
-                  return true;
-                } else {
-                  return false;
-                }
-              }
-            }
-          } else {
-            continue;
-          }
-        }
-      }
-    }
-    return false;
+    return areKingsFacing(this.arr);
   }
 
-  /**
-   * 是否某方将死对方
-   * 实现逻辑：穷举对方所有可行动作，将会导致被将军或者困毙
-   * @param isRed
-   */
+  /** Returns whether the legacy attacker's opposing side has no legal move. */
   isCheckmate(isRed = this.isRedTurn()): boolean {
-    //遍历对方可移动的盘面，是否走了以后没有被将，则说明没将死
-    for (let i = 0; i <= 8; i++) {
-      for (let j = 0; j <= 9; j++) {
-        if (this.arr[j][i] != 0) {
-          const piece = PieceArray[this.arr[j][i] - 1];
-          if (piece.IsRed() !== isRed) {
-            const movements = piece.GetAvailableMovement(i, j, this.arr, PieceArray);
-            if (movements.length > 0) {
-              for (const [tx, ty] of movements) {
-                const nextFen = FEN.UpdateFen(this, i, j, tx, ty);
-                const noChecking = !nextFen.isChecking(isRed);
-                const noFacing = !nextFen.isKingFacing();
-                if (noChecking && noFacing) {
-                  console.log(
-                    'existing move[',
-                    i,
-                    ',',
-                    j,
-                    ']->[',
-                    tx,
-                    ',',
-                    ty,
-                    '],noChecking:',
-                    noChecking
-                  );
-                  return false;
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-    //
-    return true;
+    return !hasLegalMove(this.arr, !isRed);
   }
 
   printBoard(): void {
