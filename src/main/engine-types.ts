@@ -65,6 +65,8 @@ export interface EngineOption {
   min?: number;
   /** 最大值 (仅 spin 类型) */
   max?: number;
+  /** 可选值 (仅 combo 类型) */
+  values?: string[];
 }
 
 // ========================================================================

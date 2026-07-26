@@ -20,18 +20,24 @@ and payload types in `src/common/IPCInfos.ts` instead of using string literals.
 
 ## Working approach
 
-1. Read the relevant code and make the smallest complete change.
-2. For a small or well-defined task, implement it directly. Write a short plan only
+1. Before modifying files, verify the current Git branch. Never edit directly on
+   the default branch; first create and switch to a dedicated branch or use a
+   separate worktree.
+2. Read the relevant code and make the smallest complete change.
+3. For a small or well-defined task, implement it directly. Write a short plan only
    when the work is ambiguous or spans several independent steps.
-3. Do not create specs, checklists, task documents, or other process artifacts
+4. Do not create specs, checklists, task documents, or other process artifacts
    unless the user explicitly requests them.
-4. Reuse existing modules and patterns before adding abstractions or dependencies.
-5. Add or update focused tests when changing chess rules, engine communication,
+5. Reuse existing modules and patterns before adding abstractions or dependencies.
+6. Add or update focused tests when changing chess rules, engine communication,
    game-record handling, or other testable behavior.
-6. Review the final diff and run the smallest checks that cover the change.
-7. Add user-visible changes, compatibility changes, security/dependency changes,
+7. Review the final diff and run the smallest checks that cover the change.
+8. Add user-visible changes, compatibility changes, security/dependency changes,
    and release-process changes to the appropriate category in the `CHANGELOG.md`
    "未发布" section. Do not add purely internal refactors or test-only changes.
+   Keep every changelog entry on one physical line beginning with `- `; wrapped
+   continuation lines are rejected by the release parser. Run
+   `npm run release:check` after editing `CHANGELOG.md`.
 
 User-visible text should be Chinese and use established Chinese chess terminology.
 Comments should explain non-obvious rationale rather than restate the code.

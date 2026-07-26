@@ -1,6 +1,9 @@
 import { ChildProcessWithoutNullStreams, spawn } from 'child_process';
 
-import { Info, InfoAndMove, OnInfoCallback } from './engine-types';
+import { EngineDifficulty } from '../common/EngineDifficulty';
+
+import { EngineOption, Info, InfoAndMove, OnInfoCallback } from './engine-types';
+import { SearchLimit, buildDifficultyPlan } from './engineDifficulty';
 
 const UCCI = 'ucci';
 const UCI = 'uci';
@@ -8,7 +11,7 @@ const DEFAULT_HASH_SIZE = 128;
 const DEFAULT_THREAD_COUNT = 4;
 
 export interface QueryMoveOption {
-  difficulty: number | null;
+  difficulty: EngineDifficulty | null;
   maxTime: number;
 }
 
@@ -125,6 +128,54 @@ export function parseBestMove(output: string): { bestmove: string | null; ponder
   throw new Error('引擎响应中缺少 bestmove');
 }
 
+export function parseEngineOptionLine(line: string): EngineOption | null {
+  const match = line
+    .trim()
+    .match(/^option(?:\s+name)?\s+(.+?)\s+type\s+(check|spin|combo|button|string)(?:\s+(.*))?$/i);
+  if (!match) return null;
+
+  const option: EngineOption = {
+    name: match[1].trim(),
+    type: match[2].toLowerCase() as EngineOption['type'],
+  };
+  const tokens = (match[3] ?? '').trim().split(/\s+/).filter(Boolean);
+  const sections = new Map<string, string>();
+  const values: string[] = [];
+  let key: string | undefined;
+  let valueTokens: string[] = [];
+  const commitValue = () => {
+    if (!key) return;
+    const value = valueTokens.join(' ');
+    if (key === 'var') values.push(value);
+    else sections.set(key, value);
+  };
+  for (const token of tokens) {
+    const normalized = token.toLowerCase();
+    if (
+      normalized === 'default' ||
+      normalized === 'min' ||
+      normalized === 'max' ||
+      normalized === 'var'
+    ) {
+      commitValue();
+      key = normalized;
+      valueTokens = [];
+    } else if (key) {
+      valueTokens.push(token);
+    }
+  }
+  commitValue();
+
+  const defaultValue = sections.get('default');
+  if (defaultValue !== undefined) option.default = defaultValue;
+  const min = Number(sections.get('min'));
+  if (Number.isFinite(min)) option.min = min;
+  const max = Number(sections.get('max'));
+  if (Number.isFinite(max)) option.max = max;
+  if (values.length) option.values = values;
+  return option;
+}
+
 /**
  * 串行 UCI/UCCI 引擎客户端。任一时刻只允许一个有响应的命令在途。
  */
@@ -135,8 +186,6 @@ export class ChessEngine {
   private readonly type: 'ucci' | 'uci';
   private readonly thread: number;
   private readonly hashSize: number;
-  private readonly minDiff: number;
-  private readonly maxDiff: number;
   private readonly timeouts: EngineTimeouts;
   private process: ChildProcessWithoutNullStreams | null = null;
   private current: CurrentCommand | null = null;
@@ -147,8 +196,8 @@ export class ChessEngine {
   private initializedOnce = false;
   private recovery: Promise<string> | null = null;
   private engineDisplayName = '';
-  private hasThreadOption = false;
-  private hasHashSizeOption = false;
+  private engineOptions: EngineOption[] = [];
+  private difficultyConfigKey = '';
   private analysisPromise: Promise<string> | null = null;
   private analysisPvList: Info[] = [];
   private operationQueue: Promise<void> = Promise.resolve();
@@ -159,8 +208,6 @@ export class ChessEngine {
     type: 'ucci' | 'uci' = UCCI,
     thread: number = DEFAULT_THREAD_COUNT,
     hashSize: number = DEFAULT_HASH_SIZE,
-    minDiff = 1,
-    maxDiff = 3,
     _useCliArgs = false,
     timeouts: Partial<EngineTimeouts> = {}
   ) {
@@ -169,15 +216,19 @@ export class ChessEngine {
     this.type = type;
     this.thread = thread;
     this.hashSize = hashSize;
-    this.minDiff = minDiff;
-    this.maxDiff = maxDiff;
     this.timeouts = { ...DEFAULT_TIMEOUTS, ...timeouts };
   }
 
-  getQueyForTime(time: number): string {
+  getQueryForTime(time: number): string {
     return this.type === UCCI
       ? `go ponder time ${time} movestogo 1 opptime ${time} oppmovestogo 1`
       : `go movetime ${time}`;
+  }
+
+  private getSearchCommand(search: SearchLimit): string {
+    return search.kind === 'nodes'
+      ? `go nodes ${search.value}`
+      : this.getQueryForTime(search.value);
   }
 
   public async initEngine(): Promise<string> {
@@ -196,8 +247,8 @@ export class ChessEngine {
     this.initializing = true;
     this.ready = false;
     this.closing = false;
-    this.hasThreadOption = false;
-    this.hasHashSizeOption = false;
+    this.engineOptions = [];
+    this.difficultyConfigKey = '';
     try {
       this.startProcess();
       const engineInfo = await this.issueCommand(
@@ -206,20 +257,8 @@ export class ChessEngine {
         this.timeouts.initialization
       );
       this.readEngineOptions(engineInfo);
-      if (this.hasThreadOption) {
-        await this.writeOnly(
-          this.type === UCCI
-            ? `setoption threads ${this.thread}`
-            : `setoption name Threads value ${this.thread}`
-        );
-      }
-      if (this.hasHashSizeOption) {
-        await this.writeOnly(
-          this.type === UCCI
-            ? `setoption hashsize ${this.hashSize}`
-            : `setoption name Hash value ${this.hashSize}`
-        );
-      }
+      await this.configureSpinOption(['threads'], this.thread);
+      await this.configureSpinOption(['hash', 'hashsize'], this.hashSize);
       await this.issueCommand('isready', 'ready', this.timeouts.initialization);
       this.ready = true;
       this.initializedOnce = true;
@@ -263,7 +302,9 @@ export class ChessEngine {
     }
 
     const complete =
-      (command.expected === 'protocol' && line === (this.type === UCCI ? 'ucciok' : 'uciok')) ||
+      (command.expected === 'protocol' &&
+        line === (this.type === UCCI ? 'ucciok' : 'uciok') &&
+        command.output.some((outputLine) => outputLine.startsWith('id name '))) ||
       (command.expected === 'ready' && line === 'readyok') ||
       (command.expected === 'bestmove' && (line.startsWith('bestmove') || line === 'nobestmove'));
     if (!complete) return;
@@ -306,15 +347,27 @@ export class ChessEngine {
   private readEngineOptions(output: string): void {
     for (const line of output.split(/\r?\n/)) {
       if (line.startsWith('id name ')) this.engineDisplayName = line.slice(8).trim();
-      if (!line.startsWith('option')) continue;
-      if (this.type === UCCI) {
-        this.hasThreadOption ||= /\bthreads\b/i.test(line);
-        this.hasHashSizeOption ||= /\bhashsize\b/i.test(line);
-      } else {
-        this.hasThreadOption ||= /\bname\s+Threads\b/.test(line);
-        this.hasHashSizeOption ||= /\bname\s+Hash\b/.test(line);
-      }
+      const option = parseEngineOptionLine(line);
+      if (option) this.engineOptions.push(option);
     }
+  }
+
+  private async configureSpinOption(names: string[], requestedValue: number): Promise<void> {
+    const option = this.engineOptions.find(
+      (candidate) =>
+        candidate.type === 'spin' &&
+        names.some((name) => candidate.name.toLowerCase() === name.toLowerCase())
+    );
+    if (!option) return;
+    const value = Math.min(
+      option.max ?? requestedValue,
+      Math.max(option.min ?? requestedValue, requestedValue)
+    );
+    await this.writeOnly(
+      this.type === UCCI
+        ? `setoption ${option.name} ${value}`
+        : `setoption name ${option.name} value ${value}`
+    );
   }
 
   private async ensureReady(): Promise<void> {
@@ -494,22 +547,49 @@ export class ChessEngine {
     onInfo?: OnInfoCallback
   ): Promise<InfoAndMove> {
     await this.ensureReady();
+    const plan = await this.applyDifficulty(difficulty, maxTime);
     if (this.type === UCI) await this.writeOnly('ucinewgame');
     await this.writeOnly(`position fen ${fen}`);
 
-    let requestedTime = maxTime;
-    if (difficulty !== null) {
-      requestedTime = Math.min(this.maxDiff, Math.max(this.minDiff, difficulty)) * 1500;
-    }
-    const searchTime = Math.min(requestedTime, maxTime);
+    const stopAfterMs =
+      plan.search.kind === 'nodes'
+        ? plan.search.maxTime
+        : this.type === UCCI
+          ? plan.search.value
+          : undefined;
+    const timeoutMs =
+      (plan.search.kind === 'nodes' ? plan.search.maxTime : plan.search.value) +
+      this.timeouts.searchGrace;
     const output = await this.issueCommand(
-      this.getQueyForTime(searchTime),
+      this.getSearchCommand(plan.search),
       'bestmove',
-      searchTime + this.timeouts.searchGrace,
+      timeoutMs,
       onInfo,
-      this.type === UCCI ? searchTime : undefined
+      stopAfterMs
     );
     return this.buildSearchResult(output);
+  }
+
+  private async applyDifficulty(
+    difficulty: EngineDifficulty | null,
+    maxTime: number
+  ): Promise<ReturnType<typeof buildDifficultyPlan>> {
+    const plan = buildDifficultyPlan(
+      this.engineDisplayName || this.name,
+      this.type,
+      this.engineOptions,
+      difficulty,
+      maxTime
+    );
+    const configKey = JSON.stringify(plan.commands);
+    if (configKey !== this.difficultyConfigKey) {
+      for (const command of plan.commands) await this.writeOnly(command);
+      if (plan.commands.length > 0) {
+        await this.issueCommand('isready', 'ready', this.timeouts.command);
+      }
+      this.difficultyConfigKey = configKey;
+    }
+    return plan;
   }
 
   private runSerial<T>(operation: () => Promise<T>): Promise<T> {
@@ -543,6 +623,7 @@ export class ChessEngine {
   public async analyzePosition(fen: string, onInfo: OnInfoCallback): Promise<void> {
     await this.ensureReady();
     if (this.analysisPromise || this.current) throw new Error('引擎正忙');
+    await this.applyDifficulty(null, 0);
     await this.writeOnly(`position fen ${fen}`);
     this.analysisPvList = [];
     this.analysisPromise = this.issueCommand('go infinite', 'bestmove', null, (info) => {

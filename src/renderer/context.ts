@@ -2,6 +2,7 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import { createContext } from 'react';
 
+import { EngineDifficulty } from '../common/EngineDifficulty';
 import { GameRecord } from '../common/GameRecord';
 import {
   AutoSaveResponse,
@@ -21,7 +22,7 @@ let onRestart: () => void;
 let onRotation: () => void;
 let onSave: () => void;
 let onExport: () => void;
-let difficulty = 1;
+let difficulty: EngineDifficulty = 1;
 let bgmOn = true;
 let mode = 'normal';
 let bgmType: 'welcome' | 'board' = 'welcome';
@@ -124,7 +125,7 @@ export const defaultChessState = {
     window.chessApi.updateBoardStatus(boardStatus);
   },
   difficulty: difficulty,
-  setDifficulty(diff: number) {
+  setDifficulty(diff: EngineDifficulty) {
     difficulty = diff;
   },
   queryMove(fenStr: string, turn: boolean): Promise<QueryMoveResponse> {

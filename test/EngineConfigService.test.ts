@@ -2,8 +2,8 @@ import { spawn } from 'child_process';
 import { EventEmitter } from 'events';
 import fs from 'fs';
 
-import type { EngineConfigFile } from '../src/main/engine-types';
 import { EngineConfigService } from '../src/main/EngineConfigService';
+import type { EngineConfigFile } from '../src/main/engine-types';
 
 jest.mock('electron', () => ({
   app: {
@@ -342,13 +342,27 @@ describe('EngineConfigService', () => {
 
       // Simulate UCI response
       setTimeout(() => {
-        mockProc.stdout.emit('data', Buffer.from('id name Pikafish 2024\nuciok\n'));
+        mockProc.stdout.emit(
+          'data',
+          Buffer.from(
+            'id name Pikafish 2024\noption name Threads type spin default 1 min 1 max 128\nuciok\n'
+          )
+        );
       }, 50);
 
       const result = await promise;
       expect(result.success).toBe(true);
       expect(result.protocol).toBe('uci');
       expect(result.name).toBe('Pikafish 2024');
+      expect(result.options).toEqual([
+        {
+          name: 'Threads',
+          type: 'spin',
+          default: '1',
+          min: 1,
+          max: 128,
+        },
+      ]);
     });
 
     it('should detect UCCI engine after UCI timeout', async () => {
