@@ -6,6 +6,16 @@
 
 ### 主要更新
 
+### 问题修复
+
+### 安全与依赖
+
+### 兼容性说明
+
+## [0.0.18] - 2026-07-26
+
+### 主要更新
+
 - 规范化版本准备、发布说明、资产命名及 GitHub Release 校验流程。
 
 ### 问题修复
@@ -13,10 +23,6 @@
 - 统一棋盘最终合法着法、将军和将帅照面判定，修复被钉住棋子、自陷将军与终局检测的不一致问题。
 - 补全车、炮、马、兵卒的四字中文记谱及同路棋子消歧。
 - 优化合法着法试走，避免在候选着法检查中重复序列化 FEN。
-
-### 安全与依赖
-
-### 兼容性说明
 
 ## [0.0.17] - 2026-07-25
 
@@ -75,7 +81,8 @@
 - 修复关于菜单显示问题。
 - 修复打包名称问题。
 
-[未发布]: https://github.com/imbatony/electorn-chinese-chess/compare/v0.0.17...HEAD
+[未发布]: https://github.com/imbatony/electorn-chinese-chess/compare/v0.0.18...HEAD
+[0.0.18]: https://github.com/imbatony/electorn-chinese-chess/compare/v0.0.17...v0.0.18
 [0.0.17]: https://github.com/imbatony/electorn-chinese-chess/compare/v0.0.16...v0.0.17
 [0.0.16]: https://github.com/imbatony/electorn-chinese-chess/compare/v0.0.15...v0.0.16
 [0.0.15]: https://github.com/imbatony/electorn-chinese-chess/compare/v0.0.14...v0.0.15
