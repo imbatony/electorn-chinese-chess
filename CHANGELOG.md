@@ -8,12 +8,16 @@
 
 ### 问题修复
 
-- 修复人机难度等级不生效，并按引擎能力应用原生限强或差异化搜索预算。
-- 皮卡鱼难度改用节点数分档，兼容新版已移除旧 Elo 限强选项的行为。
-
 ### 安全与依赖
 
 ### 兼容性说明
+
+## [0.0.19] - 2026-07-26
+
+### 问题修复
+
+- 修复人机难度等级不生效，并按引擎能力应用原生限强或差异化搜索预算。
+- 皮卡鱼难度改用节点数分档，兼容新版已移除旧 Elo 限强选项的行为。
 
 ## [0.0.18] - 2026-07-26
 
@@ -84,7 +88,8 @@
 - 修复关于菜单显示问题。
 - 修复打包名称问题。
 
-[未发布]: https://github.com/imbatony/electorn-chinese-chess/compare/v0.0.18...HEAD
+[未发布]: https://github.com/imbatony/electorn-chinese-chess/compare/v0.0.19...HEAD
+[0.0.19]: https://github.com/imbatony/electorn-chinese-chess/compare/v0.0.18...v0.0.19
 [0.0.18]: https://github.com/imbatony/electorn-chinese-chess/compare/v0.0.17...v0.0.18
 [0.0.17]: https://github.com/imbatony/electorn-chinese-chess/compare/v0.0.16...v0.0.17
 [0.0.16]: https://github.com/imbatony/electorn-chinese-chess/compare/v0.0.15...v0.0.16
