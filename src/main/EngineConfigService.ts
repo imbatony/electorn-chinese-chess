@@ -4,7 +4,8 @@ import { ChildProcessWithoutNullStreams, spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 
-import { EngineConfig, EngineConfigFile, EngineProbeResult } from './engine-types';
+import { parseEngineOptionLine } from './UCCI';
+import { EngineConfig, EngineConfigFile, EngineOption, EngineProbeResult } from './engine-types';
 
 /** 默认配置: 3 个内置引擎 */
 const DEFAULT_CONFIG: EngineConfigFile = {
@@ -185,6 +186,7 @@ export class EngineConfigService {
       let finished = false;
       let phase: 'uci' | 'ucci' = 'uci';
       let engineName: string | undefined;
+      let engineOptions: EngineOption[] = [];
       let phaseTimer: ReturnType<typeof setTimeout> | null = null;
 
       const cleanup = () => {
@@ -228,12 +230,24 @@ export class EngineConfigService {
         for (const rawLine of lines) {
           const line = rawLine.trim();
           if (line.startsWith('id name ')) engineName = line.slice(8).trim();
-          if (phase === 'uci' && line === 'uciok') {
-            finish({ success: true, protocol: 'uci', name: engineName });
+          const option = parseEngineOptionLine(line);
+          if (option) engineOptions.push(option);
+          if (phase === 'uci' && line === 'uciok' && engineName) {
+            finish({
+              success: true,
+              protocol: 'uci',
+              name: engineName,
+              options: engineOptions,
+            });
             return;
           }
-          if (phase === 'ucci' && line === 'ucciok') {
-            finish({ success: true, protocol: 'ucci', name: engineName });
+          if (phase === 'ucci' && line === 'ucciok' && engineName) {
+            finish({
+              success: true,
+              protocol: 'ucci',
+              name: engineName,
+              options: engineOptions,
+            });
             return;
           }
         }
@@ -265,6 +279,7 @@ export class EngineConfigService {
             phase = 'ucci';
             buffer = '';
             engineName = undefined;
+            engineOptions = [];
             write('ucci');
             startTimer();
           } else {

@@ -22,7 +22,7 @@ const Welcome = ({ navigate }: WelcomeProps) => {
   };
   const clickCvc = () => {
     chessContext.setSides({ red: DEFAULT_ENGINE_KEY, black: DEFAULT_ENGINE_KEY });
-    chessContext.setDifficulty(3);
+    chessContext.setMode('engine');
     navigate('/board/true');
   };
   const renderMenu = () => {

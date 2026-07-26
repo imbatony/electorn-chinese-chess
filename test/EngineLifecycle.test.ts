@@ -77,7 +77,7 @@ describe('ChessEngine lifecycle', () => {
     });
     const recovered = new MockProcess(respondToInitialization);
     mockedSpawn.mockReturnValueOnce(first as never).mockReturnValueOnce(recovered as never);
-    const engine = new ChessEngine('mock.exe', 'Mock', 'uci', 1, 16, 1, 3, false, {
+    const engine = new ChessEngine('mock.exe', 'Mock', 'uci', 1, 16, false, {
       command: 20,
       initialization: 20,
     });
@@ -177,7 +177,7 @@ describe('ChessEngine lifecycle', () => {
       }
     });
     mockedSpawn.mockReturnValue(proc as never);
-    const engine = new ChessEngine('mock.exe', 'Mock', 'uci', 1, 16, 1, 3, false, {
+    const engine = new ChessEngine('mock.exe', 'Mock', 'uci', 1, 16, false, {
       searchGrace: 0,
       stop: 20,
     });
@@ -233,6 +233,97 @@ describe('ChessEngine lifecycle', () => {
     await jest.advanceTimersByTimeAsync(2001);
     expect(mockedSpawn).toHaveBeenCalledTimes(1);
     expect(proc.kill).not.toHaveBeenCalled();
+    await engine.quit();
+  });
+
+  it('applies and deduplicates native Skill Level settings', async () => {
+    const proc = new MockProcess((command, currentProc) => {
+      if (command === 'uci') {
+        currentProc.output(
+          'id name GGChess\noption name Skill Level type spin default 20 min 0 max 20\nuciok\n'
+        );
+      } else if (command === 'isready') {
+        currentProc.output('readyok\n');
+      } else if (command.startsWith('go ')) {
+        currentProc.output('bestmove b0c2\n');
+      }
+    });
+    mockedSpawn.mockReturnValue(proc as never);
+    const engine = new ChessEngine('mock.exe', 'GG', 'uci');
+
+    await engine.infoAndMove('first', { difficulty: 1, maxTime: 3000 });
+    await engine.infoAndMove('second', { difficulty: 1, maxTime: 3000 });
+    await engine.infoAndMove('third', { difficulty: 2, maxTime: 3000 });
+    await engine.infoAndMove('fourth', { difficulty: null, maxTime: 3000 });
+
+    expect(
+      proc.commands.filter((command) => command === 'setoption name Skill Level value 0')
+    ).toHaveLength(1);
+    expect(
+      proc.commands.filter((command) => command === 'setoption name Skill Level value 10')
+    ).toHaveLength(1);
+    expect(
+      proc.commands.filter((command) => command === 'setoption name Skill Level value 20')
+    ).toHaveLength(1);
+    await engine.quit();
+  });
+
+  it('uses node-limited searches for Pikafish difficulties', async () => {
+    const proc = new MockProcess((command, currentProc) => {
+      if (command === 'uci') currentProc.output('id name Pikafish 2026\nuciok\n');
+      else if (command === 'isready') currentProc.output('readyok\n');
+      else if (command.startsWith('go nodes ')) {
+        currentProc.output('info depth 8 nodes 10000 pv b0c2\nbestmove b0c2\n');
+      }
+    });
+    mockedSpawn.mockReturnValue(proc as never);
+    const engine = new ChessEngine('pikafish.exe', 'Pikafish', 'uci');
+
+    const result = await engine.infoAndMove('mock-fen', { difficulty: 1, maxTime: 3000 });
+
+    expect(result.bestmove).toBe('b0c2');
+    expect(proc.commands).toContain('go nodes 10000');
+    await engine.quit();
+  });
+
+  it('waits for engine identity and options after a premature uciok', async () => {
+    const proc = new MockProcess((command, currentProc) => {
+      if (command === 'uci') {
+        currentProc.output('uciok\n');
+        currentProc.output(
+          'id name GGChess\noption name Skill Level type spin default 20 min 0 max 20\nuciok\n'
+        );
+      } else if (command === 'isready') {
+        currentProc.output('readyok\n');
+      } else if (command.startsWith('go ')) {
+        currentProc.output('bestmove b0c2\n');
+      }
+    });
+    mockedSpawn.mockReturnValue(proc as never);
+    const engine = new ChessEngine('gg.exe', 'GG', 'uci');
+
+    await engine.infoAndMove('mock-fen', { difficulty: 1, maxTime: 3000 });
+
+    expect(proc.commands).toContain('setoption name Skill Level value 0');
+    await engine.quit();
+  });
+
+  it('stops a Pikafish node search at the wall-clock safety limit', async () => {
+    jest.useFakeTimers();
+    const proc = new MockProcess((command, currentProc) => {
+      if (command === 'uci') currentProc.output('id name Pikafish 2026\nuciok\n');
+      else if (command === 'isready') currentProc.output('readyok\n');
+      else if (command === 'stop') currentProc.output('bestmove b0c2\n');
+    });
+    mockedSpawn.mockReturnValue(proc as never);
+    const engine = new ChessEngine('pikafish.exe', 'Pikafish', 'uci');
+
+    const search = engine.infoAndMove('mock-fen', { difficulty: 3, maxTime: 20 });
+    await jest.advanceTimersByTimeAsync(20);
+
+    await expect(search).resolves.toMatchObject({ bestmove: 'b0c2' });
+    expect(proc.commands).toContain('go nodes 1000000');
+    expect(proc.commands).toContain('stop');
     await engine.quit();
   });
 });

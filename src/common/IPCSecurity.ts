@@ -1,3 +1,4 @@
+import { isEngineDifficulty } from './EngineDifficulty';
 import { FEN } from './Fen';
 import {
   AboutAdjustWindowRequest,
@@ -16,11 +17,7 @@ export function isQueryMoveRequest(value: unknown): value is QueryMoveRequest {
   return (
     typeof value.fenStr === 'string' &&
     FEN.verifyFEN(value.fenStr) &&
-    (difficulty === null ||
-      (typeof difficulty === 'number' &&
-        Number.isInteger(difficulty) &&
-        difficulty >= 1 &&
-        difficulty <= 3)) &&
+    (difficulty === null || isEngineDifficulty(difficulty)) &&
     typeof value.turn === 'boolean'
   );
 }

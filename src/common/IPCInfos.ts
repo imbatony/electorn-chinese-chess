@@ -1,3 +1,4 @@
+import type { EngineDifficulty } from './EngineDifficulty';
 import type { GameRecord } from './GameRecord';
 
 export interface AboutWindowInfo {
@@ -80,7 +81,7 @@ export interface BoardStatus {
 
 export interface QueryMoveRequest {
   fenStr: string;
-  difficulty: number | null;
+  difficulty: EngineDifficulty | null;
   turn: boolean;
 }
 
